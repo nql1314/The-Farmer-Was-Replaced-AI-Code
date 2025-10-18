@@ -82,7 +82,6 @@ def smart_farm_cycle():
 
 # 显示状态
 def show_status():
-    clear()
     quick_print("=== 资源状态 ===")
     
     hay = num_items(Items.Hay)
@@ -103,6 +102,7 @@ def show_status():
         quick_print("优先: 胡萝卜")
 
 # 主循环
+clear()
 while True:
     show_status()
     smart_farm_cycle()

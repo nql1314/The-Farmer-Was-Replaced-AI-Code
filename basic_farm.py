@@ -57,7 +57,6 @@ def farm_cycle():
 # 显示库存状态
 def show_inventory():
     #显示当前资源库存#
-    clear()
     quick_print("=== 资源库存 ===")
     quick_print("干草: " + str(num_items(Items.Hay)))
     quick_print("木头: " + str(num_items(Items.Wood)))
@@ -66,6 +65,7 @@ def show_inventory():
     quick_print("肥料: " + str(num_items(Items.Fertilizer)))
 
 # 主循环
+clear()
 while True:
     # 显示当前库存
     show_inventory()

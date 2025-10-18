@@ -1,0 +1,74 @@
+# TFWR 编码规范
+
+## 注释规范
+
+### ❌ 禁止使用
+- **多行字符串注释** (`"""` 或 `'''`)
+- 所有形式的文档字符串 (docstrings)
+
+### ✅ 只允许使用
+- **单行注释** (`#`)
+- 函数说明、变量说明都用 `#` 注释
+
+### 示例
+
+#### ❌ 错误的注释方式
+```python
+def my_function():
+    """
+    这是一个函数
+    它做某些事情
+    """
+    pass
+
+def another_function():
+    '''这也是错误的'''
+    pass
+```
+
+#### ✅ 正确的注释方式
+```python
+# 这是一个函数，它做某些事情
+def my_function():
+    # 函数内部注释
+    pass
+
+# 辅助函数：计算某个值
+def helper_function():
+    # 返回计算结果
+    return value
+```
+
+## 代码风格
+
+### 函数定义
+```python
+# 函数说明写在函数定义上方
+# 参数：x, y - 坐标
+# 返回：布尔值
+def should_plant(x, y):
+    # 函数内部逻辑
+    return x % 2 == 0
+```
+
+### 变量定义
+```python
+# 配置参数
+THRESHOLD = 100  # 阈值
+world_size = get_world_size()  # 世界大小
+```
+
+### 复杂逻辑
+```python
+# 检查是否需要种植
+# 条件1: 位置满足要求
+# 条件2: 资源充足
+if condition1 and condition2:
+    # 执行种植
+    plant(Entities.Carrot)
+```
+
+## 记住
+- 永远使用 `#` 进行注释
+- 不要使用 `"""` 或 `'''`
+- 保持代码清晰，注释简洁

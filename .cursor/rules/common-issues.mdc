@@ -1,0 +1,248 @@
+---
+description: TFWR常见问题和解决方案
+---
+# TFWR 常见问题和解决方案
+
+## 常见错误
+
+### 1. 移动到不存在的位置
+```python
+# ❌ 错误：可能移动到边界外
+move(North)  # 可能失败
+
+# ✅ 正确：农场是环形的，会自动包装
+# 但最好还是检查
+if can_move(North):
+    move(North)
+```
+
+### 2. 在错误的地面类型上种植
+```python
+# ❌ 错误：某些植物只能种在特定地面
+plant(Entities.Carrot)  # 可能失败，如果不是土壤
+
+# ✅ 正确：先检查并准备地面
+if get_ground_type() != Grounds.Soil:
+    till()  # 转换为土壤
+plant(Entities.Carrot)
+```
+
+### 3. 收割未成熟的植物
+```python
+# ❌ 错误：浪费200 ticks
+harvest()  # 可能失败
+
+# ✅ 正确：先检查
+if can_harvest():
+    harvest()
+```
+
+### 4. 忘记种植物的生长时间
+```python
+# 不同植物的平均生长时间：
+# - Grass: 0.5秒
+# - Dinosaur: 0.2秒
+# - Cactus: 1秒
+# - Bush: 4秒
+# - Pumpkin: 2秒
+# - Sunflower: 5秒
+# - Carrot: 6秒
+# - Tree: 7秒
+
+# 策略：在等待慢速植物时种植快速植物
+```
+
+### 5. 无效的迷宫导航
+```python
+# 迷宫中的对冲（Entities.Hedge）不能穿越
+# 使用 can_move() 检查路径
+if get_entity_type() == Entities.Hedge:
+    # 这是墙，找另一条路
+    pass
+```
+
+## 解锁顺序建议
+
+### 早期解锁（优先级高）
+1. `Unlocks.Expand` - 扩展农场，获得更多空间
+2. `Unlocks.Loops` - 解锁循环，自动化必需
+3. `Unlocks.Operators` - 解锁运算符
+4. `Unlocks.Functions` - 定义函数，代码组织
+5. `Unlocks.Senses` - 获取位置和实体信息
+
+### 中期解锁
+1. `Unlocks.Carrots` - 获得胡萝卜
+2. `Unlocks.Speed` - 加快无人机速度
+3. `Unlocks.Lists` - 使用列表
+4. `Unlocks.Sunflowers` - 获得能量
+5. `Unlocks.Pumpkins` - 高产作物
+
+### 后期解锁
+1. `Unlocks.Mazes` - 迷宫和宝藏
+2. `Unlocks.Cactus` - 仙人掌（需要排序算法）
+3. `Unlocks.Polyculture` - 伴生种植增产
+4. `Unlocks.Megafarm` - 多无人机
+
+## 资源管理策略
+
+### 干草（Hay）
+```python
+# 最基础的资源
+# 来源：收割草
+# 用途：解锁基础功能
+
+# 快速获取策略：
+# 1. 让草自然生长
+# 2. 遍历农场收割
+# 3. 重复
+```
+
+### 木材（Wood）
+```python
+# 来源：灌木和树
+# 灌木生长快但产量少
+# 树生长慢但产量多
+
+# 优化策略：
+# - 早期：种植灌木快速获取
+# - 后期：种植树获得大量木材
+```
+
+### 能量（Power）
+```python
+# 来源：向日葵
+# 效果：自动加速移动
+
+# 策略：
+# - 尽早种植向日葵
+# - 在花瓣最多时收割（如果有10+向日葵可获得5x奖励）
+```
+
+### 金币（Gold）
+```python
+# 来源：迷宫中的宝藏
+# 用途：高级解锁
+
+# 获取策略：
+# - 需要导航算法（BFS/DFS）
+# - 宝藏金币 = 迷宫边长
+```
+
+## 特殊机制
+
+### 南瓜合并机制
+```python
+# 相邻的成熟南瓜会合并
+# 收获量 = 合并数量³
+# 例：3×3合并 = 9³ = 729个南瓜
+
+# 策略：
+# - 种植大片南瓜
+# - 等待全部成熟
+# - 一次收割获得巨量
+```
+
+### 仙人掌排序机制
+```python
+# 仙人掌大小0-9
+# 收割时，相邻的排序仙人掌会递归收割
+# 收获量 = 收割数量²
+
+# 策略：
+# - 使用 measure() 获取大小
+# - 从排序好的序列开始收割
+# - 最优：递增或递减序列
+```
+
+### 伴生种植（Polyculture）
+```python
+# 不同植物相邻时产量增加
+# 需要解锁 Unlocks.Polyculture
+
+# 策略：
+# - 棋盘式种植不同作物
+# - 测试哪些组合最有效
+```
+
+## 调试工具
+
+### 使用Debug解锁
+```python
+# 解锁 Unlocks.Debug 后可用：
+# - print() - 打印信息
+# - quick_print() - 快速打印（不暂停）
+
+# 解锁 Unlocks.Debug_2 后可用：
+# - set_execution_speed() - 调整执行速度
+# - set_farm_size() - 临时改变农场大小（测试用）
+```
+
+### 常用调试代码
+```python
+# 打印当前状态
+print("Pos:", get_pos_x(), get_pos_y())
+print("Entity:", get_entity_type())
+print("Ground:", get_ground_type())
+print("Ticks:", get_tick_count())
+
+# 测量性能
+start = get_tick_count()
+your_function()
+print("Ticks used:", get_tick_count() - start)
+```
+
+## 最佳实践
+
+### 1. 模块化代码
+```python
+def setup_field():
+    """准备田地"""
+    pass
+
+def plant_crops():
+    """种植作物"""
+    pass
+
+def harvest_crops():
+    """收割作物"""
+    pass
+
+def farming_cycle():
+    """完整的农场循环"""
+    setup_field()
+    plant_crops()
+    # 等待成熟
+    harvest_crops()
+```
+
+### 2. 使用常量
+```python
+# 定义常用的尺寸和数量
+FARM_SIZE = get_world_size()
+MIN_HAY = 100
+MIN_WOOD = 50
+```
+
+### 3. 早期返回
+```python
+def harvest_if_ready():
+    if not can_harvest():
+        return False
+    harvest()
+    return True
+```
+
+### 4. 注释你的策略
+```python
+# 这一段代码实现蛇形遍历以最小化移动
+# 预期tick消耗：(size² - 1) × 200
+for y in range(size):
+    # ...
+```
+
+## 记住
+- **测试小范围** - 在小农场测试代码，成功后再扩展
+- **逐步优化** - 先让代码工作，然后优化
+- **使用调试工具** - print() 是你的朋友
+- **参考API文档** - `__builtins__.py` 包含所有函数说明
+- **社区资源** - TFWR Discord 服务器有很多帮助

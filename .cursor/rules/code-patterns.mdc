@@ -1,0 +1,170 @@
+---
+globs: *.py
+description: TFWR游戏脚本常见代码模式和算法
+---
+# TFWR 常见代码模式
+
+## 网格遍历模式
+
+### 蛇形遍历（推荐 - 最省移动）
+```python
+for y in range(get_world_size()):
+    for x in range(get_world_size()):
+        # 执行操作
+        harvest()
+        
+        # 向右移动（奇数行时）或向左移动（偶数行时）
+        if x < get_world_size() - 1:
+            if y % 2 == 0:
+                move(East)
+            else:
+                move(West)
+    
+    # 向上移动到下一行
+    if y < get_world_size() - 1:
+        move(North)
+```
+
+### 简单行列遍历
+```python
+# 遍历每一行
+for i in range(get_world_size()):
+    # 在这行执行操作
+    for j in range(get_world_size()):
+        harvest()
+        if j < get_world_size() - 1:
+            move(East)
+    
+    # 回到行首并移动到下一行
+    for j in range(get_world_size() - 1):
+        move(West)
+    if i < get_world_size() - 1:
+        move(North)
+```
+
+## 植物管理模式
+
+### 等待植物成熟
+```python
+while not can_harvest():
+    # 在等待时可以处理其他事务
+    pass
+```
+
+### 农场初始化
+```python
+def setup_farm():
+    """初始化整个农场"""
+    for y in range(get_world_size()):
+        for x in range(get_world_size()):
+            # 翻土
+            if get_ground_type() != Grounds.Soil:
+                till()
+            
+            # 种植
+            plant(Entities.Carrot)
+            
+            # 移动到下一个位置
+            if x < get_world_size() - 1:
+                move(East)
+        
+        # 移动到下一行
+        if y < get_world_size() - 1:
+            move(North)
+            # 回到行首
+            for _ in range(get_world_size() - 1):
+                move(West)
+```
+
+### 批量收割
+```python
+def harvest_all():
+    """收割整个农场"""
+    for y in range(get_world_size()):
+        for x in range(get_world_size()):
+            if can_harvest():
+                harvest()
+            
+            if x < get_world_size() - 1:
+                move(East)
+        
+        if y < get_world_size() - 1:
+            move(North)
+            for _ in range(get_world_size() - 1):
+                move(West)
+```
+
+## 物品管理
+
+### 使用特殊物品
+```python
+# 使用水
+if num_items(Items.Water) > 0:
+    use_item(Items.Water)
+
+# 使用肥料（减少生长时间）
+if num_items(Items.Fertilizer) > 0:
+    use_item(Items.Fertilizer)
+```
+
+### 检查库存
+```python
+hay_count = num_items(Items.Hay)
+wood_count = num_items(Items.Wood)
+
+if hay_count < 100:
+    # 收集更多干草
+    pass
+```
+
+## 特定作物优化
+
+### 南瓜（需要相邻成熟）
+```python
+# 南瓜会与相邻的成熟南瓜合并
+# 收获数量 = 合并数量的立方
+# 策略：等待多个南瓜成熟后一起收割
+```
+
+### 仙人掌（需要排序收割）
+```python
+# 仙人掌有0-9的大小
+# 排序后的相邻仙人掌会递归收割
+# 收获数量 = 收割数量的平方
+# 策略：注意仙人掌的排序顺序
+```
+
+### 向日葵（花瓣最大时收割奖励）
+```python
+# 当花瓣最大且至少有10个向日葵时
+# 收获5倍能量奖励
+if get_entity_type() == Entities.Sunflower:
+    # 检查花瓣数
+    petals = measure()
+    if petals == max_petals:  # 需要知道最大花瓣数
+        harvest()
+```
+
+## 调试技巧
+
+### 性能测量
+```python
+start_time = get_time()
+start_ticks = get_tick_count()
+
+# 执行操作
+do_something()
+
+elapsed_time = get_time() - start_time
+elapsed_ticks = get_tick_count() - start_ticks
+
+print("Time:", elapsed_time, "Ticks:", elapsed_ticks)
+```
+
+### 位置调试
+```python
+x, y = get_pos_x(), get_pos_y()
+print("Position:", x, y)
+print("Entity:", get_entity_type())
+print("Ground:", get_ground_type())
+```

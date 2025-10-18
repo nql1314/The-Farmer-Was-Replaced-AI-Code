@@ -1,0 +1,107 @@
+---
+globs: *.py
+description: TFWR游戏API使用规则和最佳实践
+---
+# The Farmer Was Replaced API 使用规则
+
+## 核心API导入
+始终从 [__builtins__.py](mdc:__builtins__.py) 引用类型定义。常用的类和常量包括：
+
+### 实体类 (Entities)
+```python
+Entities.Grass      # 草
+Entities.Bush       # 灌木
+Entities.Tree       # 树
+Entities.Carrot     # 胡萝卜
+Entities.Pumpkin    # 南瓜
+Entities.Sunflower  # 向日葵
+Entities.Cactus     # 仙人掌
+```
+
+### 物品类 (Items)
+```python
+Items.Hay           # 干草
+Items.Wood          # 木材
+Items.Carrot        # 胡萝卜
+Items.Pumpkin       # 南瓜
+Items.Power         # 能量
+Items.Water         # 水
+Items.Fertilizer    # 肥料
+```
+
+### 方向 (Directions)
+```python
+North  # 上
+South  # 下
+East   # 右
+West   # 左
+```
+
+### 地面类型 (Grounds)
+```python
+Grounds.Grassland   # 草地
+Grounds.Soil        # 土壤
+```
+
+## 常用函数模式
+
+### 移动模式
+```python
+# 移动并检查成功
+if move(North):
+    # 移动成功
+    
+# 检查是否可以移动
+if can_move(North):
+    move(North)
+```
+
+### 收割模式
+```python
+# 检查是否可以收割
+if can_harvest():
+    harvest()
+    
+# 检查特定实体
+if get_entity_type() == Entities.Grass:
+    if can_harvest():
+        harvest()
+```
+
+### 种植模式
+```python
+# 翻土并种植
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(Entities.Carrot)
+```
+
+### 位置追踪
+```python
+x = get_pos_x()
+y = get_pos_y()
+world_size = get_world_size()
+```
+
+## Tick优化建议
+
+### 低成本操作 (1 tick)
+- `can_harvest()`
+- `can_move()`
+- `get_entity_type()`
+- `get_ground_type()`
+- `get_pos_x()`, `get_pos_y()`
+- `get_world_size()`
+
+### 高成本操作 (200 ticks)
+- `move()`
+- `harvest()`
+- `plant()`
+- `till()`
+- `swap()`
+
+### 优化原则
+1. **先检查再执行** - 使用 `can_*()` 函数避免无效操作
+2. **减少移动** - 移动是最昂贵的操作之一，优化路径
+3. **批量处理** - 在同一区域处理多个任务
+4. **避免重复检查** - 缓存不变的信息（如世界大小）

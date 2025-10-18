@@ -1,0 +1,22 @@
+---
+alwaysApply: true
+---
+# The Farmer Was Replaced 项目概述
+
+这是一个"The Farmer Was Replaced"（TFWR）游戏的脚本项目。
+
+## 项目结构
+- [__builtins__.py](mdc:__builtins__.py) - 游戏API的Python类型定义文件
+- [main.py](mdc:main.py) - 主脚本文件，编写游戏自动化代码
+- [save.json](mdc:save.json) - 游戏存档数据
+
+## 重要说明
+1. **这不是真正的Python** - 游戏使用类似Python的语法，但不是标准Python
+2. **类型定义仅供参考** - `__builtins__.py` 只是为了在编辑器中提供代码提示
+3. **不要修改 __builtins__.py** - 这个文件是游戏API的定义，不应该被修改
+4. **所有代码都写在 main.py** - 游戏脚本应该写在 `main.py` 中
+
+## 游戏机制
+- 游戏使用"tick"计数来衡量操作效率
+- 每个操作都有tick成本（例如 move() 需要200 ticks）
+- 目标是优化脚本以最小化tick使用量

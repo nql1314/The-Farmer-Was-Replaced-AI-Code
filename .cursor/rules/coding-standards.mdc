@@ -175,6 +175,31 @@ count = total // divisor
 - `range`, `random`
 - 游戏特定函数（`harvest`, `plant`, `move` 等）
 
+## 字典使用限制
+
+### ❌ 不支持的字典方法
+```python
+# ❌ 错误 - items() 不支持
+for key, value in my_dict.items():
+    pass
+
+# ❌ 错误 - keys() 不支持
+for key in my_dict.keys():
+    pass
+
+# ❌ 错误 - values() 不支持
+for value in my_dict.values():
+    pass
+```
+
+### ✅ 正确的字典遍历方式
+```python
+# ✅ 正确 - 直接遍历字典
+for key in my_dict:
+    value = my_dict[key]
+    # 使用 key 和 value
+```
+
 ## 运算符使用
 - ✅ 算术：`+`, `-`, `*`, `/`, `//`, `%`, `**`
 - ✅ 比较：`==`, `!=`, `<`, `>`, `<=`, `>=`

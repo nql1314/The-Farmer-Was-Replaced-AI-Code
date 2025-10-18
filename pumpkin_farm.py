@@ -4,7 +4,7 @@
 
 # 配置参数
 CONFIG = {
-    'pumpkin_threshold': 20000,
+    'pumpkin_threshold': 200000,
     'carrot_reserve': 50,
     'carrot_target': 1000,
     'field_size': 6
@@ -141,47 +141,75 @@ def second_pass_replant_dead():
     
     return (True, replanted_positions)
 
-# 第三遍：验证补种位置，如果还是枯萎继续补种
+# 第三遍：验证补种位置，如果还是枯萎继续补种（异步批量优化）
 def third_pass_verify_replanted(replanted_positions):
     if len(replanted_positions) == 0:
         return True
     
     quick_print("第3遍：验证补种的" + str(len(replanted_positions)) + "个位置")
     
-    # 对每个补种位置进行验证
+    # 需要持续监控的位置列表
+    unconfirmed = []
     for pos in replanted_positions:
-        x, y = pos
-        goto(x, y)
+        unconfirmed.append((pos[0], pos[1], 0))  # (x, y, good_count)
+    
+    max_rounds = 20
+    round_count = 0
+    
+    while len(unconfirmed) > 0 and round_count < max_rounds:
+        round_count = round_count + 1
+        quick_print("验证轮次" + str(round_count) + "，剩余" + str(len(unconfirmed)) + "个位置")
         
-        # 等待确认生长状态
-        # 如果是未成熟南瓜，等待一下让它生长
-        entity = get_entity_type()
-        if entity == Entities.Pumpkin and not can_harvest():
-            # 等待生长
-            do_a_flip()
+        # 等待生长
+        do_a_flip()
         
-        # 再次检查
-        entity = get_entity_type()
+        # 批量检查所有未确认的位置
+        next_unconfirmed = []
+        replant_list = []
         
-        # 如果还是枯萎，继续补种直到成功
-        attempts = 0
-        while entity == Entities.Dead_Pumpkin and attempts < 20:
-            attempts = attempts + 1
-            quick_print("位置(" + str(x) + "," + str(y) + ")再次枯萎，重试" + str(attempts))
-            
-            if num_items(Items.Carrot) < CONFIG['carrot_reserve']:
-                quick_print("胡萝卜不足")
-                return False
-            
-            plant(Entities.Pumpkin)
-            do_a_flip()  # 等待生长
+        for item in unconfirmed:
+            x, y, good_count = item
+            goto(x, y)
             entity = get_entity_type()
+            
+            if entity == Entities.Dead_Pumpkin:
+                # 发现枯萎，标记需要补种，good_count重置
+                replant_list.append((x, y))
+                quick_print("(" + str(x) + "," + str(y) + ")枯萎")
+            elif entity == Entities.Pumpkin:
+                # 正常南瓜，增加good_count
+                new_good_count = good_count + 1
+                if new_good_count >= 4:
+                    # 连续4次都是好的，确认成功
+                    quick_print("(" + str(x) + "," + str(y) + ")确认成功")
+                else:
+                    # 继续监控
+                    next_unconfirmed.append((x, y, new_good_count))
+            else:
+                # 异常状态（可能还在生长），继续监控
+                next_unconfirmed.append((x, y, good_count))
         
-        if entity == Entities.Pumpkin:
-            quick_print("位置(" + str(x) + "," + str(y) + ")验证成功")
-        else:
-            quick_print("位置(" + str(x) + "," + str(y) + ")失败：" + str(entity))
-            return False
+        # 批量补种枯萎的南瓜
+        if len(replant_list) > 0:
+            quick_print("补种" + str(len(replant_list)) + "个枯萎南瓜")
+            for pos in replant_list:
+                x, y = pos
+                goto(x, y)
+                
+                if num_items(Items.Carrot) < CONFIG['carrot_reserve']:
+                    quick_print("胡萝卜不足")
+                    return False
+                
+                plant(Entities.Pumpkin)
+                # 补种后重置good_count，加入监控列表
+                next_unconfirmed.append((x, y, 0))
+        
+        unconfirmed = next_unconfirmed
+    
+    # 最终检查
+    if len(unconfirmed) > 0:
+        quick_print("警告：" + str(len(unconfirmed)) + "个位置未确认")
+        return False
     
     quick_print("验证完成")
     return True
@@ -241,7 +269,6 @@ def pumpkin_farming_cycle():
     cycles = 0
     while True:
         cycles = cycles + 1
-        do_a_flip()
         elapsed = get_time() - start_time
         quick_print("全部成熟！用时:" + str(elapsed) + "s")
         harvest_pumpkin_field()

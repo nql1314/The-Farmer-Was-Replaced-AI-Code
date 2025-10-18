@@ -68,7 +68,115 @@ if condition1 and condition2:
     plant(Entities.Carrot)
 ```
 
+## 禁止使用的功能
+
+### ❌ 未解锁或不支持的功能
+在代码中**永远不要使用**以下功能：
+
+1. **Lambda 函数**
+   ```python
+   # ❌ 错误
+   func = lambda x: x * 2
+   sorted_list = sorted(items, key=lambda x: x.value)
+   ```
+
+2. **多行字符串注释**
+   ```python
+   # ❌ 错误
+   """这是多行注释"""
+   '''这也是错误的'''
+   ```
+
+3. **生成器和yield**
+   ```python
+   # ❌ 错误
+   def my_generator():
+       yield value
+   
+   for item in my_generator():
+       pass
+   ```
+
+4. **类型转换函数**
+   ```python
+   # ❌ 错误 - int() 不支持
+   percentage = int(value * 100)
+   
+   # ✅ 正确 - 直接使用数学运算
+   percentage = value * 100
+   ```
+
+5. **其他未确认解锁的高级特性**
+   - 列表推导式（如果未解锁）
+   - 生成器表达式（如果未解锁）
+   - 装饰器（如果未解锁）
+   - with 语句（如果未解锁）
+   - try/except（如果未解锁）
+
+### ✅ 替代方案
+
+**替代 Lambda：使用普通函数**
+```python
+# ✅ 正确
+def multiply_by_two(x):
+    return x * 2
+
+func = multiply_by_two
+```
+
+**替代多行注释：使用多个单行注释**
+```python
+# ✅ 正确
+# 这是第一行说明
+# 这是第二行说明
+# 这是第三行说明
+```
+
+**替代 Yield：使用列表返回**
+```python
+# ❌ 错误
+def get_positions():
+    for x in range(10):
+        yield (x, x * 2)
+
+# ✅ 正确
+def get_positions():
+    result = []
+    for x in range(10):
+        result.append((x, x * 2))
+    return result
+```
+
+**替代 int()：直接计算**
+```python
+# ❌ 错误
+percentage = int(value * 100)
+
+# ✅ 正确 - 保留小数
+percentage = value * 100
+
+# ✅ 正确 - 使用整数除法
+count = total // divisor
+```
+
 ## 记住
 - 永远使用 `#` 进行注释
 - 不要使用 `"""` 或 `'''`
+- 不要使用 `lambda`
+- 不要使用 `yield`
+- 不要使用 `int()`, `float()`, `bool()` 等类型转换（除非确认支持）
+- 只使用已确认解锁的功能
 - 保持代码清晰，注释简洁
+
+## 已确认支持的内置函数
+参考游戏中显示的函数列表：
+- `abs`, `len`, `max`, `min`, `str`
+- `dict`, `list`, `set`
+- `range`, `random`
+- 游戏特定函数（`harvest`, `plant`, `move` 等）
+
+## 运算符使用
+- ✅ 算术：`+`, `-`, `*`, `/`, `//`, `%`, `**`
+- ✅ 比较：`==`, `!=`, `<`, `>`, `<=`, `>=`
+- ✅ 逻辑：`and`, `or`, `not`
+- ✅ 赋值：`=`, `+=`, `-=`, `*=`, `/=`

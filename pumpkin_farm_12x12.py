@@ -33,6 +33,9 @@
 # - 总计：约30,000-31,000 ticks/周期（极致优化）
 # ============================================================
 
+# 导入通用工具库
+from farm_utils import goto_origin, goto_pos, generate_snake_path, optimize_path, check_and_water, check_mega_pumpkin_formed, harvest_mega_pumpkin
+
 # 配置参数
 CONFIG = {
     'pumpkin_threshold': 20000000,
@@ -43,38 +46,12 @@ CONFIG = {
     'water_threshold': 0.75   # 水量低于此值时浇水
 }
 
-# 生成蛇形路径坐标列表
-def generate_snake_path(size):
-    path = []
-    for y in range(size):
-        if y % 2 == 0:
-            for x in range(size):
-                path.append((x, y))
-        else:
-            for x in range(size - 1, -1, -1):
-                path.append((x, y))
-    return path
-
 # 预计算路径
 FULL_PATH = generate_snake_path(CONFIG['world_size'])
 
-# 移动到指定位置
+# 本地别名（为了与原代码兼容）
 def goto(target_x, target_y):
-    while get_pos_x() < target_x:
-        move(East)
-    while get_pos_x() > target_x:
-        move(West)
-    while get_pos_y() < target_y:
-        move(North)
-    while get_pos_y() > target_y:
-        move(South)
-
-# 移动到起点
-def goto_origin():
-    while get_pos_x() > 0:
-        move(West)
-    while get_pos_y() > 0:
-        move(South)
+    goto_pos(target_x, target_y)
 
 # 补充胡萝卜到目标数量
 def refill_carrots():
@@ -103,15 +80,9 @@ def refill_carrots():
     
     quick_print("胡萝卜：" + str(num_items(Items.Carrot)))
 
-# 检查并浇水
-def check_and_water():
-    water_level = get_water()
-    if water_level < CONFIG['water_threshold']:
-        if num_items(Items.Water) > 0:
-            use_item(Items.Water)
-            quick_print("浇水：水量从 " + str(water_level) + " 提升")
-            return True
-    return False
+# 检查并浇水（本地包装函数）
+def check_and_water_local():
+    return check_and_water(CONFIG['water_threshold'])
 
 # 第一遍：种植全场12x12=144个南瓜
 def first_pass_plant_all():
@@ -142,7 +113,7 @@ def first_pass_plant_all():
         planted = planted + 1
         
         # 检查并浇水
-        if check_and_water():
+        if check_and_water_local():
             watered_count = watered_count + 1
         
         if i < len(FULL_PATH) - 1:
@@ -190,78 +161,16 @@ def second_pass_replant_dead():
     
     return (True, replanted_positions)
 
-# 优化路径：对位置列表按照距离排序（贪心最近邻算法）
-def optimize_path(positions, start_x, start_y):
-    if len(positions) == 0:
-        return []
-    
-    optimized = []
-    remaining = []
-    for pos in positions:
-        remaining.append(pos)
-    
-    current_x = start_x
-    current_y = start_y
-    
-    while len(remaining) > 0:
-        # 找到距离当前位置最近的点
-        min_dist = 999999
-        min_idx = 0
-        
-        for i in range(len(remaining)):
-            x, y = remaining[i][0], remaining[i][1]
-            dist = abs(x - current_x) + abs(y - current_y)
-            if dist < min_dist:
-                min_dist = dist
-                min_idx = i
-        
-        # 移动到最近的点
-        closest = remaining[min_idx]
-        optimized.append(closest)
-        current_x = closest[0]
-        current_y = closest[1]
-        
-        # 从剩余列表中移除
-        new_remaining = []
-        for i in range(len(remaining)):
-            if i != min_idx:
-                new_remaining.append(remaining[i])
-        remaining = new_remaining
-    
-    return optimized
-
-# 检测是否已形成巨型南瓜（12x12）
-def check_mega_pumpkin_formed():
-    size = CONFIG['mega_pumpkin_size']
-    
-    # 检查对角线两端：(0,0) 和 (size-1, size-1)
-    goto(0, 0)
-    entity1 = get_entity_type()
-    if entity1 != Entities.Pumpkin:
-        return False
-    
-    id1 = measure()
-    if id1 == None:
-        return False
-    
-    goto(size - 1, size - 1)
-    entity2 = get_entity_type()
-    if entity2 != Entities.Pumpkin:
-        return False
-    
-    id2 = measure()
-    if id2 == None:
-        return False
-    
-    # ID相同说明已形成巨型南瓜
-    return id1 == id2
+# 检测是否已形成巨型南瓜（本地包装函数）
+def check_mega_pumpkin_formed_local():
+    return check_mega_pumpkin_formed(CONFIG['mega_pumpkin_size'])
 
 # 第三遍：验证补种位置（批量异步验证+路径优化+ID提前检测）
 def third_pass_verify_replanted(replanted_positions):
     if len(replanted_positions) == 0:
         # 即使没有补种位置，也检查是否已形成巨型南瓜
         quick_print("无补种位置，检查是否已形成巨型南瓜...")
-        if check_mega_pumpkin_formed():
+        if check_mega_pumpkin_formed_local():
             quick_print("检测到12x12巨型南瓜已形成！")
             return True
         return True
@@ -352,7 +261,7 @@ def third_pass_verify_replanted(replanted_positions):
             if len(unconfirmed) == 0:
                 quick_print("所有位置确认完成，等待一轮后检测巨型南瓜...")
                 do_a_flip()
-                if check_mega_pumpkin_formed():
+                if check_mega_pumpkin_formed_local():
                     quick_print("检测到12x12巨型南瓜已形成！")
                     return True
             
@@ -418,7 +327,7 @@ def third_pass_verify_replanted(replanted_positions):
             do_a_flip()
             
             # 然后检测是否形成巨型南瓜
-            if check_mega_pumpkin_formed():
+            if check_mega_pumpkin_formed_local():
                 quick_print("检测到12x12巨型南瓜已形成！提前结束验证")
                 return True
         else:
@@ -426,7 +335,7 @@ def third_pass_verify_replanted(replanted_positions):
             do_a_flip()
             
             # 快速检查是否已形成巨型南瓜（不等待不浇水）
-            if check_mega_pumpkin_formed():
+            if check_mega_pumpkin_formed_local():
                 quick_print("检测到12x12巨型南瓜已形成！提前结束验证")
                 return True
         
@@ -440,7 +349,7 @@ def third_pass_verify_replanted(replanted_positions):
     if len(unconfirmed) > 0:
         quick_print("警告：" + str(len(unconfirmed)) + "个位置未确认")
         # 但如果已经形成巨型南瓜，也返回True
-        if check_mega_pumpkin_formed():
+        if check_mega_pumpkin_formed_local():
             quick_print("但检测到巨型南瓜已形成，继续收获")
             return True
         return False
@@ -448,30 +357,9 @@ def third_pass_verify_replanted(replanted_positions):
     quick_print("验证完成，所有位置已确认")
     return True
 
-# 直接收获12x12巨型南瓜
-def harvest_mega_pumpkin():
-    quick_print("收获12x12巨型南瓜")
-    
-    before_count = num_items(Items.Pumpkin)
-    
-    # 移动到(0,0)收获
-    goto(0, 0)
-    
-    if can_harvest():
-        # 获取ID用于显示
-        pumpkin_id = measure()
-        
-        harvest()
-        
-        after_count = num_items(Items.Pumpkin)
-        gained = after_count - before_count
-        
-        quick_print("收获12x12巨型南瓜 ID:" + str(pumpkin_id))
-        quick_print("+" + str(gained) + " 个南瓜，总计:" + str(after_count))
-        return True
-    else:
-        quick_print("警告：无法收获，可能还未完全成熟")
-        return False
+# 直接收获12x12巨型南瓜（本地包装函数）
+def harvest_mega_pumpkin_local():
+    return harvest_mega_pumpkin(CONFIG['mega_pumpkin_size'])
 
 # 南瓜种植主循环
 def pumpkin_farming_cycle():
@@ -526,7 +414,7 @@ def pumpkin_farming_cycle():
     
     # 如果验证阶段已检测到巨型南瓜形成，直接收获
     # 否则继续等待
-    if not check_mega_pumpkin_formed():
+    if not check_mega_pumpkin_formed_local():
         quick_print("等待巨型南瓜形成...")
         wait_cycles = 0
         max_wait = 20
@@ -537,7 +425,7 @@ def pumpkin_farming_cycle():
             quick_print("等待周期 " + str(wait_cycles))
             
             # 快速检查是否已形成（不等待不浇水）
-            if check_mega_pumpkin_formed():
+            if check_mega_pumpkin_formed_local():
                 quick_print("检测到12x12巨型南瓜已形成！")
                 break
         
@@ -546,7 +434,7 @@ def pumpkin_farming_cycle():
     
     # 收获12x12巨型南瓜
     harvest_start = get_tick_count()
-    harvest_mega_pumpkin()
+    harvest_mega_pumpkin_local()
     harvest_ticks = get_tick_count() - harvest_start
     
     elapsed_time = get_time() - start_time

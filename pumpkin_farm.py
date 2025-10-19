@@ -2,6 +2,9 @@
 # 策略：种植6x6巨型南瓜以获得最大乘数 (6*6*6 = 216个南瓜)
 # 优化：第一遍种植，第二遍补种枯萎，第三遍验证补种，最多3次遍历
 
+# 导入通用工具库
+from farm_utils import goto_origin, goto_pos, generate_snake_path
+
 # 配置参数
 CONFIG = {
     'pumpkin_threshold': 200000,
@@ -12,39 +15,13 @@ CONFIG = {
 
 world_size = get_world_size()
 
-# 生成蛇形路径坐标列表
-def generate_snake_path(size):
-    path = []
-    for y in range(size):
-        if y % 2 == 0:
-            for x in range(size):
-                path.append((x, y))
-        else:
-            for x in range(size - 1, -1, -1):
-                path.append((x, y))
-    return path
-
 # 预计算路径
 PUMPKIN_PATH = generate_snake_path(CONFIG['field_size'])
 FULL_FARM_PATH = generate_snake_path(world_size)
 
-# 移动到指定位置
+# 本地别名（为了与原代码兼容）
 def goto(target_x, target_y):
-    while get_pos_x() < target_x:
-        move(East)
-    while get_pos_x() > target_x:
-        move(West)
-    while get_pos_y() < target_y:
-        move(North)
-    while get_pos_y() > target_y:
-        move(South)
-
-# 移动到起点
-def goto_origin():
-    while get_pos_x() > 0:
-        move(West)
-    while get_pos_y() > 0:
-        move(South)
+    goto_pos(target_x, target_y)
 
 # 补种胡萝卜到目标数量
 def refill_carrots():

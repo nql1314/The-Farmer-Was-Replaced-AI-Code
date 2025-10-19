@@ -1,6 +1,8 @@
 # The Farmer Was Replaced - 智能资源平衡种植脚本（12x12优化版）
 # 单次循环，地图记录伴生，顺路种植，零回头
 
+# 注意：此脚本不使用farm_utils中的移动函数，因为它使用原地蛇形遍历
+
 SIZE = get_world_size()
 
 # 资源目标

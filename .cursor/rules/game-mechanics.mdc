@@ -1,0 +1,892 @@
+---
+alwaysApply: true
+---
+# TFWR 游戏机制详解
+
+## 巨型农场（Megafarm）- 多无人机系统
+
+### 基础概念
+- 允许使用多架无人机同时工作
+- 每架无人机运行独立的程序
+- 新无人机通过 `spawn_drone(function)` 生成
+- 无人机之间不会碰撞
+
+### 无人机管理函数
+```python
+# 生成新无人机
+drone = spawn_drone(drone_function)
+
+# 获取无人机数量上限
+max_count = max_drones()
+
+# 获取当前无人机数量
+current_count = num_drones()
+
+# 等待无人机完成
+result = wait_for(drone)
+
+# 检查无人机是否完成（不等待）
+if has_finished(drone):
+    pass
+```
+
+### 生成无人机示例
+```python
+# 示例1：简单的列收割
+def harvest_column():
+    for _ in range(get_world_size()):
+        harvest()
+        move(North)
+
+while True:
+    if spawn_drone(harvest_column):
+        move(East)
+    else:
+        break  # 无法生成更多无人机
+
+# 示例2：传递不同参数
+for dir in [North, East, South, West]:
+    def task():
+        move(dir)
+        do_a_flip()
+    spawn_drone(task)
+```
+
+### 实用模式：并行 for_all
+```python
+# 在整个农场上并行执行函数
+def for_all(f):
+    def row():
+        for _ in range(get_world_size()-1):
+            f()
+            move(East)
+        f()
+    
+    for _ in range(get_world_size()):
+        if not spawn_drone(row):
+            row()  # 如果无法生成无人机，自己执行
+        move(North)
+
+# 使用示例
+for_all(harvest)
+```
+
+### 条件生成模式
+```python
+# 如果有可用无人机就生成，否则自己执行
+if not spawn_drone(task):
+    task()
+```
+
+### 重要限制
+
+#### 1. 无共享内存
+```python
+# ❌ 错误：无人机不共享全局变量
+x = 0
+
+def increment():
+    global x
+    x += 1
+
+wait_for(spawn_drone(increment))
+print(x)  # 仍然是 0！
+
+# ✅ 正确：通过返回值传递数据
+def get_value():
+    return 42
+
+drone = spawn_drone(get_value)
+result = wait_for(drone)  # result = 42
+```
+
+#### 2. 竞态条件
+```python
+# ❌ 危险：多个无人机可能同时执行
+if get_water() < 0.5:
+    use_item(Items.Water)  # 可能多个无人机都会浇水
+
+# ✅ 正确：避免多个无人机操作同一地块
+# 将农场分区，每个无人机负责不同区域
+```
+
+#### 3. 生成成本
+- 生成无人机需要时间（约200 ticks）
+- 不要为每个小任务都生成无人机
+- 适合长时间运行的任务
+
+## 迷宫（Mazes）
+
+### 生成迷宫
+```python
+# 在灌木上使用奇异物质生成迷宫
+plant(Entities.Bush)
+
+# 计算所需的奇异物质数量
+# 基础：n 份奇异物质 = n×n 迷宫
+# 每次升级：需要 2 倍物质，宝藏金币也翻倍
+maze_upgrades = num_unlocked(Unlocks.Mazes) - 1
+substance_needed = get_world_size() * (2 ** maze_upgrades)
+
+use_item(Items.Weird_Substance, substance_needed)
+```
+
+### 迷宫特性
+- 无人机无法飞过树篱（`Entities.Hedge`）
+- 宝藏位置：`get_entity_type() == Entities.Treasure`
+- 宝藏金币数 = 迷宫面积（如 5×5 = 25 金币）
+- 首次生成的迷宫无循环
+
+### 导航迷宫
+```python
+# 检查是否有墙
+if can_move(North):
+    move(North)
+
+# 或者尝试移动并检查结果
+if move(North):
+    # 移动成功
+    pass
+else:
+    # 遇到墙
+
+# 获取宝藏位置
+treasure_x, treasure_y = measure()
+```
+
+### 收获宝藏
+```python
+# 在宝藏上收获获得金币
+if get_entity_type() == Entities.Treasure:
+    harvest()  # 获得金币，迷宫消失
+```
+
+### 重复使用迷宫（高级）
+```python
+# 在宝藏上再次使用奇异物质
+# 宝藏会移动到随机位置，金币增加
+use_item(Items.Weird_Substance, substance_needed)
+
+# 注意：
+# - 重复使用会移除一些墙，可能产生循环
+# - 最多重复 300 次
+# - 金币不会比新建迷宫更多
+# - 仅作为额外挑战
+```
+
+### 迷宫算法提示
+```python
+# 推荐使用深度优先搜索（DFS）或广度优先搜索（BFS）
+# 需要记录已访问位置，避免死循环
+
+# DFS 示例框架
+visited = set()
+
+def explore(x, y):
+    if (x, y) in visited:
+        return
+    
+    visited.add((x, y))
+    
+    if get_entity_type() == Entities.Treasure:
+        harvest()
+        return
+    
+    # 尝试四个方向
+    for direction in [North, East, South, West]:
+        if can_move(direction):
+            move(direction)
+            new_x, new_y = get_pos_x(), get_pos_y()
+            explore(new_x, new_y)
+            # 回溯
+            move(opposite_direction(direction))
+```
+
+## 肥料系统（Fertilizer）
+
+### 基础机制
+- 每 10 秒自动获得 1 份肥料
+- 每次升级 `Unlocks.Fertilizer`，生成速度翻倍
+- 使用肥料缩短生长时间 2 秒
+
+```python
+# 使用肥料
+if num_items(Items.Fertilizer) > 0:
+    use_item(Items.Fertilizer)
+```
+
+### 感染机制（副作用）
+```python
+# 施肥的植物会被感染
+# 收获时，一半产量变成奇异物质（Items.Weird_Substance）
+
+# 例如：正常收获 10 个胡萝卜
+# 感染后收获：5 个胡萝卜 + 5 个奇异物质
+```
+
+### 奇异物质的用途
+```python
+# 1. 切换感染状态（自己+相邻植物）
+use_item(Items.Weird_Substance)
+
+# 感染的植物 → 治愈（同时感染相邻健康植物）
+# 健康的植物 → 感染（同时治愈相邻感染植物）
+
+# 2. 生成迷宫（在灌木上使用）
+plant(Entities.Bush)
+use_item(Items.Weird_Substance, amount)
+```
+
+### 肥料策略
+```python
+# 策略1：快速收获（接受感染）
+# - 适合需要快速获得资源时
+# - 奇异物质可用于迷宫
+
+# 策略2：避免感染
+# - 不使用肥料
+# - 或使用奇异物质治愈感染
+
+# 策略3：感染管理
+# - 在特定区域使用肥料（感染区）
+# - 其他区域保持健康（清洁区）
+```
+
+## 浇水系统（Watering）
+
+### 基础机制
+- 每 10 秒自动获得 1 罐水（0.25 水量）
+- 每次升级 `Unlocks.Watering`，生成速度翻倍
+- 地块含水量：0.0 到 1.0
+
+```python
+# 检查含水量
+water_level = get_water()
+
+# 浇水
+if get_water() < 0.5:
+    use_item(Items.Water)
+```
+
+### 生长速度影响
+```python
+# 含水量对生长速度的影响：
+# 0.0 水量 → 1.0 倍速度（正常）
+# 0.5 水量 → 3.0 倍速度
+# 1.0 水量 → 5.0 倍速度（最快）
+
+# 线性关系：速度 = 1 + 4 × 含水量
+```
+
+### 水分蒸发
+- 平均每秒失去当前含水量的 1%
+- 高含水量比低含水量蒸发更快
+- 存在随机变化
+
+### 浇水策略
+```python
+# 策略1：维持高含水量（快速生长）
+def maintain_water():
+    if get_water() < 0.8:
+        use_item(Items.Water)
+
+# 策略2：批量浇水
+def water_all():
+    for y in range(get_world_size()):
+        for x in range(get_world_size()):
+            if get_water() < 0.5:
+                use_item(Items.Water)
+            move(East if x < get_world_size()-1 else North)
+
+# 策略3：优先浇慢速作物
+# 树和胡萝卜生长慢，优先浇水
+if get_entity_type() in [Entities.Tree, Entities.Carrot]:
+    if get_water() < 0.7:
+        use_item(Items.Water)
+```
+
+## 向日葵系统（Sunflowers）
+
+### 基础机制
+```python
+# 种植向日葵
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(Entities.Sunflower)
+```
+
+### 花瓣数量
+- 最少：7 片花瓣
+- 最多：15 片花瓣
+- 可以在成熟前测量
+
+```python
+# 测量花瓣数
+petals = measure()  # 返回 7-15
+```
+
+### 5倍能量奖励条件
+```python
+# 条件1：农场上至少有 10 株向日葵
+# 条件2：收获花瓣数最多的那株
+
+sunflower_count = 0
+max_petals = 0
+max_petals_pos = None
+
+# 扫描农场找到最大花瓣数
+for y in range(get_world_size()):
+    for x in range(get_world_size()):
+        if get_entity_type() == Entities.Sunflower:
+            sunflower_count += 1
+            if can_harvest():
+                petals = measure()
+                if petals > max_petals:
+                    max_petals = petals
+                    max_petals_pos = (x, y)
+        # ... 移动代码 ...
+
+# 收获最大花瓣的向日葵
+if sunflower_count >= 10 and max_petals_pos:
+    # 移动到目标位置
+    # harvest()  # 获得 5 倍能量
+```
+
+### 能量消耗
+- 无人机自动使用能量加速（2倍速度）
+- 每 30 次操作消耗 1 点能量
+- 代码执行也消耗能量（但比操作少得多）
+
+### 向日葵策略
+```python
+# 策略1：早期能量收集
+# 种植至少 10 株向日葵，找最大花瓣收获
+
+# 策略2：持续能量供应
+# 维持向日葵农场，定期收获补充能量
+
+# 策略3：优先级
+# 能量加速所有操作，尽早解锁和使用
+```
+
+## 南瓜系统（Pumpkins）
+
+### 基础机制
+```python
+# 种植南瓜（需要消耗胡萝卜）
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(Entities.Pumpkin)  # 消耗 1 个胡萝卜
+```
+
+### 合并机制
+```python
+# 当一个方形区域内所有南瓜都完全成熟时，它们会合并
+# 收获量公式：
+# - n×n 南瓜 (n < 6)：n³ 个南瓜
+# - n×n 南瓜 (n ≥ 6)：n²×6 个南瓜
+
+# 示例：
+# 1×1 = 1³ = 1
+# 2×2 = 2³ = 8
+# 3×3 = 3³ = 27
+# 6×6 = 6²×6 = 216
+# 10×10 = 10²×6 = 600
+```
+
+### 枯萎机制
+```python
+# 南瓜成熟后有 20% 几率枯萎
+# 枯萎南瓜（Dead_Pumpkin）收获时无产出
+# can_harvest() 在枯萎南瓜上返回 False
+
+# 处理枯萎
+if get_entity_type() == Entities.Dead_Pumpkin:
+    # 直接种植新南瓜，会自动移除枯萎南瓜
+    plant(Entities.Pumpkin)
+```
+
+### 南瓜策略
+```python
+# 策略1：大规模种植（推荐 6×6 或更大）
+def plant_pumpkin_grid(size):
+    for y in range(size):
+        for x in range(size):
+            if get_ground_type() != Grounds.Soil:
+                till()
+            plant(Entities.Pumpkin)
+            # ... 移动 ...
+
+# 策略2：等待全部成熟
+def wait_all_mature(size):
+    while True:
+        all_mature = True
+        for y in range(size):
+            for x in range(size):
+                if get_entity_type() == Entities.Pumpkin:
+                    if not can_harvest():
+                        all_mature = False
+                        break
+                # ... 移动 ...
+            if not all_mature:
+                break
+        
+        if all_mature:
+            break
+        
+        # 等待或处理其他事务
+        do_a_flip()
+
+# 策略3：替换枯萎南瓜
+def replace_dead_pumpkins(size):
+    for y in range(size):
+        for x in range(size):
+            entity = get_entity_type()
+            if entity == Entities.Dead_Pumpkin:
+                plant(Entities.Pumpkin)
+            elif entity == Entities.Pumpkin and not can_harvest():
+                # 检查是否枯萎
+                pass
+            # ... 移动 ...
+```
+
+## 仙人掌系统（Cactus）
+
+### 基础机制
+```python
+# 种植仙人掌
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(Entities.Cactus)
+```
+
+### 大小和排序
+```python
+# 仙人掌大小：0-9
+size = measure()  # 返回 0-9
+
+# 也可以测量相邻仙人掌
+north_size = measure(North)
+east_size = measure(East)
+```
+
+### 递归收割条件
+仙人掌被认为"已排序"当：
+- North 和 East 方向的相邻仙人掌 ≥ 自己的大小
+- South 和 West 方向的相邻仙人掌 ≤ 自己的大小
+- 所有相邻仙人掌都完全成熟
+
+```python
+# 收获量公式：收获 n 个仙人掌 = n² 个 Items.Cactus
+# 例如：收获 10 个 = 100 个仙人掌
+
+# 已排序的仙人掌显示为绿色
+# 未排序的成熟仙人掌显示为棕色
+```
+
+### 交换仙人掌
+```python
+# 交换当前位置和指定方向的仙人掌
+swap(North)  # 与北边的仙人掌交换
+swap(East)   # 与东边的仙人掌交换
+```
+
+### 排序算法
+```python
+# 示例：冒泡排序（按行排序，然后按列排序）
+def sort_cacti(size):
+    # 先对每一行排序
+    for y in range(size):
+        # 移动到行首
+        # 冒泡排序这一行
+        for i in range(size - 1):
+            for j in range(size - 1):
+                current = measure()
+                next_val = measure(East)
+                if current > next_val:
+                    swap(East)
+                move(East)
+            # 回到行首
+        
+        move(North)
+    
+    # 再对每一列排序
+    for x in range(size):
+        # 移动到列首
+        # 冒泡排序这一列
+        for i in range(size - 1):
+            for j in range(size - 1):
+                current = measure()
+                next_val = measure(North)
+                if current > next_val:
+                    swap(North)
+                move(North)
+            # 回到列首
+        
+        move(East)
+
+# 重要：对行排序不会打乱列，对列排序不会打乱行
+```
+
+### 已排序示例
+```python
+# 这些是已排序的仙人掌网格（收获会蔓延）：
+# 3 4 5    3 3 3    1 2 3    1 5 9
+# 2 3 4    2 2 2    1 2 3    1 3 8
+# 1 2 3    1 1 1    1 2 3    1 3 4
+
+# 这个没有完全排序（只有左下角已排序）：
+# 1 5 3
+# 4 9 7
+# 3 3 2
+```
+
+## 混合种植（Polyculture）
+
+### 基础机制
+- 需要解锁 `Unlocks.Polyculture`
+- 特定植物需要特定伴生植物
+- 产量乘数：初始 5 倍，每次升级增加
+
+### 获取伴生需求
+```python
+# 获取当前植物的伴生需求
+result = get_companion()
+
+if result:
+    plant_type, (x, y) = result
+    # plant_type: 需要的伴生植物类型
+    # (x, y): 伴生植物应该在的位置
+```
+
+### 伴生规则
+- 可选植物：`Entities.Grass`, `Entities.Bush`, `Entities.Tree`, `Entities.Carrot`
+- 位置：3 步范围内（不包括自己）
+- 伴生植物的生长阶段无关紧要
+
+```python
+# 示例：满足伴生需求
+# 种植灌木
+plant(Entities.Bush)
+bush_x, bush_y = get_pos_x(), get_pos_y()
+
+# 获取伴生需求
+companion_type, (target_x, target_y) = get_companion()
+
+# 移动到目标位置种植伴生植物
+# ... 导航到 (target_x, target_y) ...
+if get_ground_type() != Grounds.Soil:
+    till()
+plant(companion_type)
+
+# 回到灌木位置收获
+# ... 导航到 (bush_x, bush_y) ...
+harvest()  # 获得额外产量
+```
+
+### 混合种植策略
+```python
+# 策略1：记录伴生需求
+companion_map = {}  # {(x, y): (companion_type, (comp_x, comp_y))}
+
+# 第一遍：种植并记录需求
+for y in range(get_world_size()):
+    for x in range(get_world_size()):
+        plant(Entities.Bush)
+        result = get_companion()
+        if result:
+            companion_map[(x, y)] = result
+        # ... 移动 ...
+
+# 第二遍：满足伴生需求
+for pos in companion_map:
+    comp_type, (comp_x, comp_y) = companion_map[pos]
+    # 移动到 (comp_x, comp_y)
+    # 种植 comp_type
+    # ...
+
+# 第三遍：收获
+# ...
+
+# 策略2：棋盘式混合种植
+# 种植不同作物形成棋盘图案，增加伴生匹配机会
+```
+
+## 恐龙系统（Dinosaurs）
+
+### 装备恐龙帽
+```python
+# 装备恐龙帽
+change_hat(Hats.Dinosaur_Hat)
+
+# 卸下恐龙帽（装备其他帽子）
+change_hat(Hats.None)  # 或其他帽子
+```
+
+### 苹果机制
+```python
+# 装备恐龙帽后：
+# 1. 自动购买苹果（消耗仙人掌）
+# 2. 苹果放置在无人机当前位置
+# 3. 移动时吃掉苹果，尾巴增长一节
+# 4. 新苹果在随机位置生成
+
+# 获取下一个苹果位置
+if get_entity_type() == Entities.Apple:
+    next_x, next_y = measure()
+```
+
+### 尾巴机制
+```python
+# 尾巴跟随无人机移动
+# 无法移动到尾巴所在位置
+# move() 在遇到尾巴时返回 False
+
+# 检查是否填满农场
+if not can_move(North) and not can_move(East) and \
+   not can_move(South) and not can_move(West):
+    # 尾巴填满了整个农场
+    pass
+```
+
+### 移动成本优化
+```python
+# 恐龙帽移动成本：400 ticks（基础）
+# 每吃一个苹果：减少 3%（向下取整）
+
+# 成本计算公式：
+ticks = 400
+for i in range(apples_eaten):
+    ticks -= ticks * 0.03 // 1
+
+# 示例：
+# 0 个苹果: 400 ticks
+# 1 个苹果: 400 - 12 = 388 ticks
+# 10 个苹果: ~294 ticks
+# 50 个苹果: ~88 ticks
+```
+
+### 收获骨头
+```python
+# 卸下恐龙帽时收获尾巴
+# 骨头数量 = 尾巴长度²
+
+# 示例：
+# 长度 16 → 256 根骨头
+# 长度 100 → 10000 根骨头
+
+change_hat(Hats.None)  # 或其他帽子
+# 自动获得 (tail_length²) 根骨头
+```
+
+### 恐龙策略
+```python
+# 策略1：哈密尔顿路径（覆盖所有格子）
+# 设计一条路径访问每个格子恰好一次
+
+# 策略2：调整农场大小
+# 使用 set_world_size() 创建容易覆盖的大小
+set_world_size(4)  # 4×4 更容易填满
+
+# 策略3：路径规划
+# 使用蛇形遍历确保不会困住自己
+
+def hamilton_path():
+    size = get_world_size()
+    for y in range(size):
+        if y % 2 == 0:
+            # 向东移动
+            for x in range(size - 1):
+                move(East)
+        else:
+            # 向西移动
+            for x in range(size - 1):
+                move(West)
+        
+        if y < size - 1:
+            move(North)
+
+# 注意：只有一架无人机可以装备恐龙帽
+```
+
+## 调试工具
+
+### 基础调试（Unlocks.Debug）
+```python
+# 打印信息（会暂停并显示）
+print("Position:", get_pos_x(), get_pos_y())
+print("Entity:", get_entity_type())
+
+# 快速打印（不暂停，只记录到输出窗口）
+quick_print("Tick count:", get_tick_count())
+```
+
+### 高级调试（Unlocks.Debug_2）
+```python
+# 调整执行速度（0.1 到 100）
+set_execution_speed(2)   # 2 倍速
+set_execution_speed(0.5) # 0.5 倍速（慢动作）
+
+# 临时改变农场大小（执行结束后恢复）
+set_world_size(3)  # 改为 3×3
+# ... 测试代码 ...
+# 执行结束后自动恢复原大小
+```
+
+### 调试技巧
+```python
+# 1. 性能分析
+start = get_tick_count()
+your_function()
+print("Ticks used:", get_tick_count() - start)
+
+# 2. 状态检查
+def print_state():
+    print("Pos:", get_pos_x(), get_pos_y())
+    print("Entity:", get_entity_type())
+    print("Ground:", get_ground_type())
+    print("Water:", get_water())
+
+# 3. 断点模拟
+def debug_checkpoint(label):
+    print("Checkpoint:", label)
+    print_state()
+    # 可以在这里暂停检查
+
+# 4. 输出文件
+# 所有输出会记录到 output.txt
+# 路径：游戏文件夹/output.txt
+```
+
+## 计时系统（Timing）
+
+### 时间函数
+```python
+# 获取实际经过的秒数
+seconds = get_time()
+
+# 获取消耗的 tick 数（0 tick 成本）
+ticks = get_tick_count()
+
+# 这三个函数完全免费（0 ticks）：
+# - get_time()
+# - get_tick_count()  
+# - quick_print()
+```
+
+### Tick 成本详情
+```python
+# 组合操作：1 tick
+# +, -, *, /, //, %, and, or, <, >, ==, != 等
+
+# 单值操作：0 ticks
+# -(负号), not
+
+# 控制流：
+# - if 语句：1 tick（不包括条件计算）
+# - for/while 开始：1 tick（不包括条件/序列计算）
+# - 迭代本身：0 ticks
+# - return, break, continue：0 ticks
+
+# 函数和变量：
+# - 函数调用：0 ticks
+# - 函数定义：1 tick
+# - 变量读写：0 ticks
+# - import：0 ticks
+
+# 特殊：
+# - pass：1 tick（可用于精确延迟）
+# - 索引操作 [key]：1 tick
+# - 字典/集合索引：1 tick + 键大小相关的额外成本
+```
+
+### 执行速度
+```python
+# 基础速度：每秒 400 ticks
+# 速度升级：每级倍增
+# 能量：再次倍增（如果有能量）
+
+# 实际速度 = 400 × (2^speed_upgrades) × (2 if has_power else 1)
+```
+
+## 模拟系统（Simulation）
+
+### 使用模拟
+```python
+# 模拟允许测试代码而不改变真实农场状态
+run_time = simulate(
+    filename="my_script",           # 要运行的文件名
+    sim_unlocks=Unlocks,            # 解锁项（全部最高级）
+    sim_items={Items.Hay: 100},     # 起始物品
+    sim_globals={"test_mode": True},# 全局变量
+    seed=42,                        # 随机种子（负数=随机）
+    speedup=64                      # 加速倍数
+)
+print("Simulation took", run_time, "seconds")
+```
+
+### 指定解锁等级
+```python
+# 方式1：最高等级（使用序列）
+sim_unlocks = [Unlocks.Speed, Unlocks.Expand]
+
+# 方式2：指定等级（使用字典）
+sim_unlocks = {
+    Unlocks.Speed: 3,    # 3 级速度
+    Unlocks.Expand: -1   # 最高级扩张（负数表示最高级）
+}
+```
+
+### 传递数据到模拟
+```python
+# 模拟有独立的作用域
+# 通过 sim_globals 传递数据
+
+my_data = [1, 2, 3]
+run_time = simulate(
+    filename="processor",
+    sim_globals={"data": my_data}
+)
+
+# 在 processor 文件中：
+# data 变量可用，值为 [1, 2, 3]
+# 注意：修改不会影响原始数据（复制）
+```
+
+### 随机种子
+```python
+# 使用固定种子进行可重复测试
+seed = 42
+time1 = simulate("test", seed=seed)
+time2 = simulate("test", seed=seed)
+# time1 == time2（结果完全相同）
+
+# 使用随机种子
+time3 = simulate("test", seed=-1)
+```
+
+### 模拟策略
+```python
+# 策略1：A/B 测试
+time_a = simulate("strategy_a", seed=42)
+time_b = simulate("strategy_b", seed=42)
+if time_a < time_b:
+    # 使用策略 A
+    pass
+
+# 策略2：参数优化
+best_time = 999999
+best_param = 0
+for param in range(1, 10):
+    time = simulate(
+        "test",
+        sim_globals={"param": param},
+        seed=42
+    )
+    if time < best_time:
+        best_time = time
+        best_param = param
+
+# 策略3：快速原型
+# 在模拟中测试想法，避免影响真实存档
+```

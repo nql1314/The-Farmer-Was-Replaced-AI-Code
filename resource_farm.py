@@ -1,196 +1,172 @@
-# The Farmer Was Replaced - 智能资源平衡种植脚本（全面优化版）
-# 利用伴生植物机制，动态调整策略
-# 优化：减少计算，智能伴生处理，路径优化
+# The Farmer Was Replaced - 智能资源平衡种植脚本（12x12优化版）
+# 单次循环，地图记录伴生，顺路种植，零回头
 
-world_size = get_world_size()
+SIZE = get_world_size()
 
 # 资源目标
 TARGETS = {
-    Items.Hay: 10000,
-    Items.Wood: 5000,
-    Items.Carrot: 5000
+    Items.Hay: 1000000,
+    Items.Wood: 500000,
+    Items.Carrot: 500000
 }
 
-# 生成蛇形路径
-def generate_snake_path(size):
-    path = []
-    for y in range(size):
-        if y % 2 == 0:
-            for x in range(size):
-                path.append((x, y))
-        else:
-            for x in range(size - 1, -1, -1):
-                path.append((x, y))
-    return path
+# 伴生地图（存储每个位置需要的作物类型）
+companion_map = {}
 
-FARM_PATH = generate_snake_path(world_size)
-
-# 移动到指定位置
-def goto(tx, ty):
-    while get_pos_x() < tx:
-        move(East)
-    while get_pos_x() > tx:
-        move(West)
-    while get_pos_y() < ty:
-        move(North)
-    while get_pos_y() > ty:
-        move(South)
-
-# 获取优先级（优化：减少除法）
+# 获取优先级（使用乘法避免除法）
 def get_priority():
     hay = num_items(Items.Hay)
     wood = num_items(Items.Wood)
     carrot = num_items(Items.Carrot)
     
-    # 使用乘法代替除法（避免浮点运算）
-    # hay/10000 vs wood/5000 => hay*5000 vs wood*10000
-    hay_score = hay * 5 * 5  # hay / 10000
-    wood_score = wood * 10 * 5  # wood / 5000
-    carrot_score = carrot * 10 * 5  # carrot / 5000
-    
-    if hay_score <= wood_score and hay_score <= carrot_score:
-        return 'grass'
-    elif wood_score <= carrot_score:
-        return 'tree'
+    # 比较相对进度：hay/1000000 vs wood/500000 vs carrot/500000
+    # 使用乘法：hay*1 vs wood*2 vs carrot*2
+    if hay <= wood * 2 and hay <= carrot * 2:
+        return 0  # grass
+    elif wood <= carrot:
+        return 1  # tree
     else:
-        return 'carrot'
+        return 2  # carrot
 
-# 决定作物
+# 决定种植作物（内联优化，返回整数）
 def decide_crop(x, y, priority):
     # 树的判断
-    if priority == 'tree':
+    if priority == 1:  # tree priority
         if x % 2 == 0 and y % 2 == 0:
-            return (Entities.Tree, False)
+            return 1  # Tree
     else:
         if x % 3 == 0 and y % 3 == 0:
-            return (Entities.Tree, False)
+            return 1  # Tree
     
     # 胡萝卜的判断
-    if priority == 'carrot':
+    if priority == 2:  # carrot priority
         if (x + y) % 2 == 0:
-            return (Entities.Carrot, True)
-    elif priority == 'tree':
+            return 2  # Carrot
+    elif priority == 1:
         if (x + y) % 2 == 0:
-            return (Entities.Carrot, True)
+            return 2  # Carrot
     else:
         if (x + y) % 4 == 0:
-            return (Entities.Carrot, True)
+            return 2  # Carrot
     
     # 默认种草
-    return (Entities.Grass, False)
+    return 0  # Grass
 
-# 种植并记录伴生
-def plant_and_record(x, y, priority, companions):
-    crop, needs_soil = decide_crop(x, y, priority)
-    
-    # 准备土壤
-    if needs_soil and get_ground_type() != Grounds.Soil:
-        till()
-    
-    # 种植
-    plant(crop)
-    
-    # 记录伴生需求
-    comp = get_companion()
-    if comp != None:
-        comp_type, comp_pos = comp
-        companions[(x, y)] = (comp_type, comp_pos)
-    
-    # 胡萝卜浇水
-    if crop == Entities.Carrot:
-        if get_water() < 0.5 and num_items(Items.Water) > 0:
-            use_item(Items.Water)
-    
-    return crop
+# 种植作物（根据编号）
+def plant_crop(crop_id):
+    if crop_id == 1:
+        plant(Entities.Tree)
+    elif crop_id == 2:
+        if get_ground_type() != Grounds.Soil:
+            till()
+        plant(Entities.Carrot)
+        # 胡萝卜浇水
+        if get_water() < 0.5:
+            if num_items(Items.Water) > 0:
+                use_item(Items.Water)
+    else:
+        plant(Entities.Grass)
 
-# 满足伴生需求（优化：智能检查）
-def fulfill_companions(companions):
-    fulfilled = 0
-    
-    for pos in companions:
-        req = companions[pos]
-        comp_type, comp_pos = req
-        cx, cy = comp_pos
-        
-        goto(cx, cy)
-        
-        current = get_entity_type()
-        
-        # 只在不匹配时才重新种植
-        if current != comp_type:
-            # 收割
-            if can_harvest():
-                harvest()
-            
-            # 准备土壤
-            if comp_type == Entities.Carrot:
-                if get_ground_type() != Grounds.Soil:
-                    till()
-            
-            # 种植
-            plant(comp_type)
-            fulfilled = fulfilled + 1
-    
-    return fulfilled
-
-# 主循环
+# 主循环（单次蛇形遍历）
 def farm_cycle():
     priority = get_priority()
     
-    # 策略描述
-    if priority == 'grass':
-        desc = '干草'
-    elif priority == 'tree':
-        desc = '木头'
-    else:
-        desc = '胡萝卜'
-    
     # 统计
-    stats = {
-        'harvested': 0,
-        'trees': 0,
-        'carrots': 0,
-        'grass': 0,
-        'companions': 0
-    }
+    harvested = 0
+    trees = 0
+    carrots = 0
+    grass = 0
+    companions_recorded = 0
+    companions_planted = 0
     
-    companions = {}
-    
-    # 第一遍：种植并记录伴生
-    for i in range(len(FARM_PATH)):
-        x, y = FARM_PATH[i]
-        
-        # 收割
-        if can_harvest():
-            harvest()
-            stats['harvested'] = stats['harvested'] + 1
-        
-        # 种植
-        crop = plant_and_record(x, y, priority, companions)
-        
-        # 统计
-        if crop == Entities.Tree:
-            stats['trees'] = stats['trees'] + 1
-        elif crop == Entities.Carrot:
-            stats['carrots'] = stats['carrots'] + 1
+    # 蛇形遍历
+    for y in range(SIZE):
+        # 确定行方向
+        if y % 2 == 0:
+            x_range = range(SIZE)
+            x_step = 1
         else:
-            stats['grass'] = stats['grass'] + 1
+            x_range = range(SIZE - 1, -1, -1)
+            x_step = -1
         
-        # 移动
-        if i < len(FARM_PATH) - 1:
-            nx, ny = FARM_PATH[i + 1]
-            goto(nx, ny)
-    
-    # 第二遍：满足伴生
-    if len(companions) > 0:
-        stats['companions'] = fulfill_companions(companions)
+        for x in x_range:
+            # 收割
+            if can_harvest():
+                harvest()
+                harvested = harvested + 1
+            
+            # 检查是否有伴生需求
+            pos_key = y * SIZE + x
+            if pos_key in companion_map:
+                # 按照伴生需求种植
+                comp_type = companion_map[pos_key]
+                
+                if comp_type == Entities.Carrot:
+                    if get_ground_type() != Grounds.Soil:
+                        till()
+                    plant(Entities.Carrot)
+                    if get_water() < 0.5:
+                        if num_items(Items.Water) > 0:
+                            use_item(Items.Water)
+                    carrots = carrots + 1
+                elif comp_type == Entities.Tree:
+                    plant(Entities.Tree)
+                    trees = trees + 1
+                else:
+                    plant(Entities.Grass)
+                    grass = grass + 1
+                
+                companions_planted = companions_planted + 1
+                # 清除已处理的伴生需求
+                companion_map.pop(pos_key)
+            else:
+                # 按照策略种植
+                crop_id = decide_crop(x, y, priority)
+                plant_crop(crop_id)
+                
+                # 统计
+                if crop_id == 1:
+                    trees = trees + 1
+                elif crop_id == 2:
+                    carrots = carrots + 1
+                else:
+                    grass = grass + 1
+            
+            # 记录伴生需求到地图
+            comp = get_companion()
+            if comp != None:
+                comp_type, comp_pos = comp
+                cx, cy = comp_pos
+                comp_key = cy * SIZE + cx
+                # 只记录，不立即处理
+                companion_map[comp_key] = comp_type
+                companions_recorded = companions_recorded + 1
+            
+            # 移动到下一格（蛇形）
+            if x != x_range[-1]:
+                if x_step > 0:
+                    move(East)
+                else:
+                    move(West)
+        
+        # 移动到下一行
+        if y < SIZE - 1:
+            move(North)
     
     # 显示统计
-    quick_print(desc + " 收:" + str(stats['harvested']) + 
-               " 树:" + str(stats['trees']) +
-               " 萝:" + str(stats['carrots']) +
-               " 草:" + str(stats['grass']) +
-               " 伴:" + str(stats['companions']))
+    if priority == 0:
+        desc = "草"
+    elif priority == 1:
+        desc = "树"
+    else:
+        desc = "萝"
+    
+    quick_print(desc + " 收:" + str(harvested) + 
+               " 树:" + str(trees) +
+               " 萝:" + str(carrots) +
+               " 草:" + str(grass) +
+               " 伴记:" + str(companions_recorded) +
+               " 伴种:" + str(companions_planted))
 
 # 显示状态
 def show_status():
@@ -205,7 +181,7 @@ def show_status():
 
 # 主程序
 clear()
-quick_print("=== 智能农场 ===")
+quick_print("=== 12x12智能农场 ===")
 
 while True:
     show_status()

@@ -166,6 +166,7 @@ def third_pass_verify_replanted(replanted_positions):
         # 批量检查所有未确认的位置
         next_unconfirmed = []
         replant_list = []
+        confirmed_count = 0
         
         for item in unconfirmed:
             x, y, good_count = item
@@ -173,15 +174,17 @@ def third_pass_verify_replanted(replanted_positions):
             entity = get_entity_type()
             
             if entity == Entities.Dead_Pumpkin:
-                # 发现枯萎，标记需要补种，good_count重置
+                # 发现枯萎，标记需要补种
                 replant_list.append((x, y))
                 quick_print("(" + str(x) + "," + str(y) + ")枯萎")
             elif entity == Entities.Pumpkin:
                 # 正常南瓜，增加good_count
                 new_good_count = good_count + 1
-                if new_good_count >= 4:
-                    # 连续4次都是好的，确认成功
+                if new_good_count >= 3:
+                    # 连续3次都是好的，确认成功，从未确认列表移除
+                    confirmed_count = confirmed_count + 1
                     quick_print("(" + str(x) + "," + str(y) + ")确认成功")
+                    # 注意：不加入next_unconfirmed，自动从监控中移除
                 else:
                     # 继续监控
                     next_unconfirmed.append((x, y, new_good_count))
@@ -201,8 +204,12 @@ def third_pass_verify_replanted(replanted_positions):
                     return False
                 
                 plant(Entities.Pumpkin)
-                # 补种后重置good_count，加入监控列表
+                # 补种后重置good_count为0，重新加入监控列表
                 next_unconfirmed.append((x, y, 0))
+        
+        # 显示本轮统计
+        if confirmed_count > 0:
+            quick_print("本轮确认" + str(confirmed_count) + "个位置")
         
         unconfirmed = next_unconfirmed
     
@@ -211,7 +218,7 @@ def third_pass_verify_replanted(replanted_positions):
         quick_print("警告：" + str(len(unconfirmed)) + "个位置未确认")
         return False
     
-    quick_print("验证完成")
+    quick_print("验证完成，所有位置已确认")
     return True
 
 # 收获南瓜田

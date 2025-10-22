@@ -349,5 +349,5 @@ def farm_mazes():
 
 # 执行
 run_maze()  # 单次迷宫
-# farm_mazes()  # 批量迷宫
+#farm_mazes()  # 批量迷宫
 

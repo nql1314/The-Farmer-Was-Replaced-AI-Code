@@ -1,279 +1,451 @@
-# The Farmer Was Replaced - 多无人机向日葵能量农场
-# 策略：并行种植和扫描，快速收获能量
+# The Farmer Was Replaced - 多无人机向日葵能量农场（共享内存版）
+# 策略：使用共享内存协调多无人机，实时跟踪成熟向日葵，最大化5倍奖励
 
-from farm_utils import goto_pos, optimize_path
+from farm_utils import goto_pos
 
 SIZE = get_world_size()
 
-# 无人机种植函数：处理一个区域
-def drone_plant_region(x_start, x_end, y_start, y_end):
+# ====================
+# 共享内存工具函数
+# ====================
+
+def create_shared_sunflower_tracker():
+    # 源无人机：返回共享的向日葵跟踪器
+    # 结构：{位置键: (花瓣数, x, y), ...}
+    return {}
+
+def create_shared_stats():
+    # 源无人机：返回共享统计数据
+    return {
+        "total_sunflowers": 0,    # 总向日葵数
+        "mature_count": 0,         # 成熟数量
+        "max_petals": 0,           # 最大花瓣数
+        "harvested": 0,            # 已收获数量
+        "bonus_count": 0,          # 5倍奖励次数
+        "power_gained": 0          # 获得能量
+    }
+
+def add_sunflower_to_tracker(tracker, x, y, petals):
+    # 添加或更新向日葵到跟踪器
+    key = str(x) + "," + str(y)
+    tracker[key] = (petals, x, y)
+
+def remove_sunflower_from_tracker(tracker, x, y):
+    # 从跟踪器中移除向日葵
+    key = str(x) + "," + str(y)
+    if key in tracker:
+        tracker.pop(key)
+
+def get_tracker_size(tracker):
+    # 获取跟踪器中的向日葵数量
+    count = 0
+    for key in tracker:
+        count = count + 1
+    return count
+
+def get_max_petals_from_tracker(tracker):
+    # 获取跟踪器中的最大花瓣数
+    max_p = 0
+    for key in tracker:
+        petals, x, y = tracker[key]
+        if petals > max_p:
+            max_p = petals
+    return max_p
+
+def get_sunflowers_by_petals(tracker, target_petals):
+    # 获取指定花瓣数的所有向日葵位置
+    positions = []
+    for key in tracker:
+        petals, x, y = tracker[key]
+        if petals == target_petals:
+            positions.append((x, y))
+    return positions
+
+# ====================
+# 批次分配函数
+# ====================
+
+def split_batches_by_strips(num_batches):
+    # 按照条带分配批次（每个无人机负责连续的几行）
+    if num_batches <= 0:
+        return []
+    
+    batches = []
+    rows_per_batch = SIZE // num_batches
+    remainder = SIZE % num_batches
+    
+    start_y = 0
+    for i in range(num_batches):
+        # 前 remainder 个批次多分配一行
+        if i < remainder:
+            end_y = start_y + rows_per_batch + 1
+        else:
+            end_y = start_y + rows_per_batch
+        
+        # 生成这个批次的所有位置（蛇形遍历）
+        batch_positions = []
+        for y in range(start_y, end_y):
+            if y % 2 == 0:
+                # 偶数行：从左到右
+                for x in range(SIZE):
+                    batch_positions.append((x, y))
+            else:
+                # 奇数行：从右到左
+                for x in range(SIZE - 1, -1, -1):
+                    batch_positions.append((x, y))
+        
+        if len(batch_positions) > 0:
+            batches.append(batch_positions)
+        
+        start_y = end_y
+    
+    return batches
+
+# ====================
+# 无人机工作函数（使用共享内存）
+# ====================
+
+def drone_plant_batch(batch):
+    # 无人机：种植一批位置
     planted_count = 0
     
-    for y in range(y_start, y_end):
-        for x in range(x_start, x_end):
-            goto_pos(x, y)
-            
-            # 收割旧作物
-            if can_harvest():
-                harvest()
-            
-            # 翻土（向日葵需要土壤）
-            if get_ground_type() != Grounds.Soil:
-                till()
-            
-            # 种植向日葵
-            plant(Entities.Sunflower)
-            planted_count = planted_count + 1
+    for pos in batch:
+        x, y = pos
+        goto_pos(x, y)
+        
+        # 收割旧作物
+        if can_harvest():
+            harvest()
+        
+        # 翻土（向日葵需要土壤）
+        if get_ground_type() != Grounds.Soil:
+            till()
+        
+        # 种植向日葵
+        plant(Entities.Sunflower)
+        planted_count = planted_count + 1
     
     return planted_count
 
-# 并行初始化农场
-def initialize_farm_mega():
-    quick_print("多无人机初始化农场...")
+def drone_scan_and_track_batch(batch, tracker_source):
+    # 无人机：扫描一批位置并更新共享跟踪器
+    # 返回：扫描到的成熟向日葵数量
+    tracker = wait_for(tracker_source)
     
-    # 计算区域划分
-    max_d = max_drones()
-    regions = []
+    scanned_count = 0
     
-    if max_d >= 4:
-        # 4个无人机：2x2划分
-        half = SIZE // 2
-        regions = [
-            (0, half, 0, half),
-            (half, SIZE, 0, half),
-            (0, half, half, SIZE),
-            (half, SIZE, half, SIZE)
-        ]
-    elif max_d >= 2:
-        # 2个无人机：水平划分
-        half = SIZE // 2
-        regions = [
-            (0, SIZE, 0, half),
-            (0, SIZE, half, SIZE)
-        ]
-    else:
-        # 单无人机：整个农场
-        regions = [(0, SIZE, 0, SIZE)]
-    
-    # 启动无人机
-    drones = []
-    total_planted = 0
-    
-    for i in range(len(regions)):
-        x_start, x_end, y_start, y_end = regions[i]
+    for pos in batch:
+        x, y = pos
+        goto_pos(x, y)
         
-        def create_task(xs, xe, ys, ye):
-            def task():
-                return drone_plant_region(xs, xe, ys, ye)
-            return task
+        entity = get_entity_type()
         
-        task_func = create_task(x_start, x_end, y_start, y_end)
-        
-        if i < len(regions) - 1:
-            drone = spawn_drone(task_func)
-            if drone:
-                drones.append(drone)
-            else:
-                count = task_func()
-                total_planted = total_planted + count
-        else:
-            count = task_func()
-            total_planted = total_planted + count
-    
-    # 等待所有无人机完成
-    for drone in drones:
-        count = wait_for(drone)
-        if count:
-            total_planted = total_planted + count
-    
-    quick_print("初始化完成：" + str(total_planted) + " 株向日葵")
-
-# 无人机扫描函数：扫描一个区域的向日葵
-def drone_scan_region(x_start, x_end, y_start, y_end):
-    # 返回：(花瓣数, 位置) 的列表
-    sunflowers = []
-    
-    for y in range(y_start, y_end):
-        for x in range(x_start, x_end):
-            goto_pos(x, y)
-            
-            if get_entity_type() == Entities.Sunflower and can_harvest():
+        if entity == Entities.Sunflower:
+            if can_harvest():
+                # 成熟的向日葵，测量花瓣数并添加到跟踪器
                 petals = measure()
-                sunflowers.append((petals, x, y))
+                add_sunflower_to_tracker(tracker, x, y, petals)
+                scanned_count = scanned_count + 1
+            # 未成熟的向日葵不做处理
     
-    return sunflowers
+    return scanned_count
 
-# 并行扫描所有向日葵
-def scan_sunflowers_mega():
-    quick_print("并行扫描向日葵...")
+def drone_harvest_positions(positions, tracker_source, stats_source):
+    # 无人机：收获指定位置的向日葵
+    # 返回：收获数量
+    tracker = wait_for(tracker_source)
+    stats = wait_for(stats_source)
     
-    # 计算区域划分
-    max_d = max_drones()
-    regions = []
-    
-    if max_d >= 4:
-        half = SIZE // 2
-        regions = [
-            (0, half, 0, half),
-            (half, SIZE, 0, half),
-            (0, half, half, SIZE),
-            (half, SIZE, half, SIZE)
-        ]
-    elif max_d >= 2:
-        half = SIZE // 2
-        regions = [
-            (0, SIZE, 0, half),
-            (0, SIZE, half, SIZE)
-        ]
-    else:
-        regions = [(0, SIZE, 0, SIZE)]
-    
-    # 启动无人机
-    drones = []
-    all_sunflowers = []
-    
-    for i in range(len(regions)):
-        x_start, x_end, y_start, y_end = regions[i]
-        
-        def create_task(xs, xe, ys, ye):
-            def task():
-                return drone_scan_region(xs, xe, ys, ye)
-            return task
-        
-        task_func = create_task(x_start, x_end, y_start, y_end)
-        
-        if i < len(regions) - 1:
-            drone = spawn_drone(task_func)
-            if drone:
-                drones.append(drone)
-            else:
-                flowers = task_func()
-                for f in flowers:
-                    all_sunflowers.append(f)
-        else:
-            flowers = task_func()
-            for f in flowers:
-                all_sunflowers.append(f)
-    
-    # 等待所有无人机完成
-    for drone in drones:
-        flowers = wait_for(drone)
-        if flowers:
-            for f in flowers:
-                all_sunflowers.append(f)
-    
-    return all_sunflowers
-
-# 分组并收获向日葵
-def harvest_sunflowers_by_petals(all_sunflowers):
-    if len(all_sunflowers) == 0:
-        quick_print("没有成熟的向日葵")
-        return
-    
-    quick_print("扫描到 " + str(len(all_sunflowers)) + " 株成熟向日葵")
-    
-    # 按花瓣数分组
-    petal_groups = {}
-    for item in all_sunflowers:
-        petals, x, y = item
-        if petals not in petal_groups:
-            petal_groups[petals] = []
-        petal_groups[petals].append((x, y))
-    
-    total_harvested = 0
-    total_bonus = 0
+    harvested = 0
     power_before = num_items(Items.Power)
     
-    # 从15瓣开始收获
-    for petals in range(15, 6, -1):
-        if petals not in petal_groups:
-            continue
+    for pos in positions:
+        x, y = pos
+        goto_pos(x, y)
         
-        positions = petal_groups[petals]
-        count = len(positions)
-        
-        # 计算剩余数量
-        remaining = len(all_sunflowers) - total_harvested
-        
-        # 检查是否满足5倍奖励条件
-        is_max_petals = True
-        for p in range(petals + 1, 16):
-            if p in petal_groups:
-                is_max_petals = False
-                break
-        
-        get_bonus = is_max_petals and remaining >= 10
-        
-        # 显示信息
-        if get_bonus:
-            quick_print("收获 " + str(count) + " 株 " + str(petals) + " 瓣（5倍奖励）")
-            total_bonus = total_bonus + count
-        else:
-            quick_print("收获 " + str(count) + " 株 " + str(petals) + " 瓣")
-        
-        # 优化路径并收获
-        current_x = get_pos_x()
-        current_y = get_pos_y()
-        optimized_positions = optimize_path(positions, current_x, current_y)
-        
-        for px, py in optimized_positions:
-            goto_pos(px, py)
-            if can_harvest():
-                harvest()
-                total_harvested = total_harvested + 1
-        
-        # 如果剩余<10，停止5倍奖励并全部收获
-        remaining = len(all_sunflowers) - total_harvested
-        if remaining > 0 and remaining < 10:
-            quick_print("剩余 " + str(remaining) + " 株，全部收获")
-            for p in range(petals - 1, 6, -1):
-                if p not in petal_groups:
-                    continue
-                pos_list = petal_groups[p]
-                for px, py in pos_list:
-                    goto_pos(px, py)
-                    if can_harvest():
-                        harvest()
-                        total_harvested = total_harvested + 1
-            break
+        if get_entity_type() == Entities.Sunflower and can_harvest():
+            harvest()
+            remove_sunflower_from_tracker(tracker, x, y)
+            harvested = harvested + 1
     
     power_after = num_items(Items.Power)
     power_gained = power_after - power_before
     
-    quick_print("本轮总计：收获 " + str(total_harvested) + " 株，5倍 " + str(total_bonus) + " 次，能量 +" + str(power_gained))
-
-# 滚动收获循环
-def rolling_harvest_cycle():
-    # 扫描向日葵
-    all_sunflowers = scan_sunflowers_mega()
+    # 更新统计
+    stats["harvested"] = stats["harvested"] + harvested
+    stats["power_gained"] = stats["power_gained"] + power_gained
     
-    # 收获向日葵
-    harvest_sunflowers_by_petals(all_sunflowers)
+    return harvested
 
+# ====================
+# 阶段函数（使用共享内存机制）
+# ====================
+
+def stage_plant():
+    # 阶段1：并行种植整个地图
+    quick_print("=== 阶段1：种植 ===")
+    
+    # 并行种植（使用条带分配）
+    available = max_drones() + 1
+    batches = split_batches_by_strips(available)
+    quick_print("分批: " + str(len(batches)) + " 条带")
+    
+    drones = []
+    results = []
+    
+    for i in range(len(batches)):
+        def create_task(b):
+            def task():
+                return drone_plant_batch(b)
+            return task
+        
+        task = create_task(batches[i])
+        
+        if i < len(batches) - 1:
+            drone = spawn_drone(task)
+            if drone:
+                drones.append(drone)
+            else:
+                results.append(task())
+        else:
+            results.append(task())
+    
+    for drone in drones:
+        results.append(wait_for(drone))
+    
+    # 统计结果
+    total = 0
+    for result in results:
+        total = total + result
+    
+    quick_print("已种植: " + str(total) + " 株")
+    return True
+
+def stage_scan_and_track(tracker_source):
+    # 阶段2：并行扫描并更新跟踪器
+    quick_print("=== 阶段2：扫描成熟向日葵 ===")
+    
+    # 清空跟踪器
+    tracker = wait_for(tracker_source)
+    for key in tracker:
+        tracker.pop(key)
+    
+    # 并行扫描（使用条带分配）
+    available = max_drones() + 1
+    batches = split_batches_by_strips(available)
+    
+    drones = []
+    results = []
+    
+    for i in range(len(batches)):
+        def create_task(b, src):
+            def task():
+                return drone_scan_and_track_batch(b, src)
+            return task
+        
+        task = create_task(batches[i], tracker_source)
+        
+        if i < len(batches) - 1:
+            drone = spawn_drone(task)
+            if drone:
+                drones.append(drone)
+            else:
+                results.append(task())
+        else:
+            results.append(task())
+    
+    for drone in drones:
+        results.append(wait_for(drone))
+    
+    # 统计结果
+    total_scanned = 0
+    for result in results:
+        total_scanned = total_scanned + result
+    
+    quick_print("扫描到: " + str(total_scanned) + " 株成熟向日葵")
+    return total_scanned
+
+def stage_harvest_by_petals(tracker_source, stats_source):
+    # 阶段3：按花瓣数收获（优先最大花瓣，最大化5倍奖励）
+    quick_print("=== 阶段3：按花瓣收获 ===")
+    
+    tracker = wait_for(tracker_source)
+    stats = wait_for(stats_source)
+    
+    # 重置统计
+    stats["harvested"] = 0
+    stats["bonus_count"] = 0
+    stats["power_gained"] = 0
+    
+    total_count = get_tracker_size(tracker)
+    if total_count == 0:
+        quick_print("没有成熟的向日葵")
+        return
+    
+    # 从15瓣开始收获
+    for petals in range(15, 6, -1):
+        positions = get_sunflowers_by_petals(tracker, petals)
+        
+        if len(positions) == 0:
+            continue
+        
+        # 计算剩余数量
+        remaining = get_tracker_size(tracker)
+        
+        # 检查是否满足5倍奖励条件
+        max_petals = get_max_petals_from_tracker(tracker)
+        get_bonus = petals == max_petals and remaining >= 10
+        
+        # 显示信息
+        if get_bonus:
+            quick_print("收获 " + str(len(positions)) + " 株 " + str(petals) + " 瓣（5倍奖励）")
+            stats["bonus_count"] = stats["bonus_count"] + len(positions)
+        else:
+            quick_print("收获 " + str(len(positions)) + " 株 " + str(petals) + " 瓣")
+        
+        # 并行收获
+        available = max_drones() + 1
+        
+        # 分批：确保每个批次大小合理
+        batch_size = len(positions) // available
+        if batch_size == 0:
+            batch_size = 1
+        
+        batches = []
+        for i in range(0, len(positions), batch_size):
+            batches.append(positions[i:i + batch_size])
+        
+        if len(batches) > available:
+            # 合并多余的批次
+            extra = batches[available:]
+            for batch in extra:
+                for pos in batch:
+                    batches[available - 1].append(pos)
+            batches = batches[:available]
+        
+        drones = []
+        results = []
+        
+        for i in range(len(batches)):
+            def create_task(b, tsrc, ssrc):
+                def task():
+                    return drone_harvest_positions(b, tsrc, ssrc)
+                return task
+            
+            task = create_task(batches[i], tracker_source, stats_source)
+            
+            if i < len(batches) - 1:
+                drone = spawn_drone(task)
+                if drone:
+                    drones.append(drone)
+                else:
+                    results.append(task())
+            else:
+                results.append(task())
+        
+        for drone in drones:
+            results.append(wait_for(drone))
+        
+        # 如果剩余<10，停止（避免浪费5倍奖励机会）
+        remaining = get_tracker_size(tracker)
+        if remaining > 0 and remaining < 10:
+            quick_print("剩余 " + str(remaining) + " 株（<10），停止收获")
+            break
+    
+    # 显示统计
+    quick_print("本轮总计：收获 " + str(stats["harvested"]) + " 株，5倍 " + str(stats["bonus_count"]) + " 次，能量 +" + str(stats["power_gained"]))
+
+# ====================
+# 主循环
+# ====================
+
+def farming_cycle(tracker_source, stats_source):
+    # 主农场循环
+    # 使用共享内存机制协调多个无人机
+    # 策略：种植→持续扫描和收获循环
+    
+    quick_print("=== 新一轮 ===")
+    quick_print("能量: " + str(num_items(Items.Power)))
+    
+    start = get_time()
+    
+    # 阶段1：种植
+    stage_plant()
+    
+    # 持续循环：扫描和收获
+    round_num = 0
+    total_harvested_this_cycle = 0
+    
+    while True:
+        round_num = round_num + 1
+        quick_print("")
+        quick_print("--- 循环 " + str(round_num) + " ---")
+        
+        # 扫描成熟的向日葵
+        scanned = stage_scan_and_track(tracker_source)
+        
+        if scanned == 0:
+            # 没有成熟的向日葵
+            if round_num == 1:
+                # 第一次扫描就没有，说明刚种植完，等待一会儿
+                quick_print("等待向日葵成熟...")
+                do_a_flip()
+                continue
+            else:
+                # 之前有成熟的，现在没有了，结束这一轮
+                quick_print("所有向日葵已收获，结束本轮")
+                break
+        
+        # 收获向日葵
+        stage_harvest_by_petals(tracker_source, stats_source)
+        
+        # 获取统计
+        stats = wait_for(stats_source)
+        total_harvested_this_cycle = total_harvested_this_cycle + stats["harvested"]
+        
+        # 检查是否还有剩余的向日葵未收获（<10株时会停止）
+        remaining = get_tracker_size(wait_for(tracker_source))
+        if remaining > 0:
+            quick_print("剩余 " + str(remaining) + " 株未收获（保留等待更多成熟）")
+        
+        # 安全检查：避免无限循环
+        if round_num > 50:
+            quick_print("警告：超过50轮循环，结束本轮")
+            break
+    
+    # 最终统计
+    elapsed = get_time() - start
+    quick_print("")
+    quick_print("=== 本轮完成 ===")
+    quick_print("用时: " + str(elapsed) + "s")
+    quick_print("总收获: " + str(total_harvested_this_cycle) + " 株")
+    quick_print("能量: " + str(num_items(Items.Power)))
+    
+    return True
+
+# ====================
 # 主程序
+# ====================
+
 clear()
-quick_print("=== 多无人机向日葵能量农场 ===")
-quick_print("农场大小：" + str(SIZE) + "x" + str(SIZE))
-quick_print("最大无人机：" + str(max_drones()))
-quick_print("策略：并行种植和扫描，快速收获")
+quick_print("=== 多无人机向日葵能量农场（共享内存版）===")
+quick_print("地图: " + str(SIZE) + "x" + str(SIZE))
+quick_print("无人机: " + str(max_drones()))
+quick_print("策略: 共享内存跟踪，实时扫描，最大化5倍奖励")
 quick_print("")
 
-cycle_count = 0
+# 创建共享内存源
+tracker_source = spawn_drone(create_shared_sunflower_tracker)
+stats_source = spawn_drone(create_shared_stats)
 
+cycle = 0
 while True:
-    # 初始化：并行种植
-    goto_pos(0, 0)
-    initialize_farm_mega()
+    cycle = cycle + 1
     quick_print("")
-    quick_print("开始滚动收获循环...")
+    quick_print("========================================")
+    quick_print(">>> 轮次 " + str(cycle) + " <<<")
     quick_print("========================================")
     
-    # 滚动收获循环
-    cycle_count = cycle_count + 1
+    farming_cycle(tracker_source, stats_source)
+    
     quick_print("")
-    quick_print("--- 第 " + str(cycle_count) + " 轮 ---")
-    quick_print("能量：" + str(num_items(Items.Power)))
-    
-    rolling_harvest_cycle()
-    
-    quick_print("========================================")

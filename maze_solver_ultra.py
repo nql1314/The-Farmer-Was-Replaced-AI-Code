@@ -215,7 +215,7 @@ def create_maze():
     global g_maze_map
     global g_maze_size
     global g_reuse_count
-    
+    clear()
     g_maze_size = get_world_size()
     maze_level = num_unlocked(Unlocks.Mazes)
     substance_needed = g_maze_size * (2 ** (maze_level - 1))
@@ -240,7 +240,7 @@ def relocate_treasure():
     if get_entity_type() != Entities.Treasure:
         return False
     
-    if g_reuse_count >= 300:
+    if g_reuse_count >= 200:
         return False
     
     maze_level = num_unlocked(Unlocks.Mazes)
@@ -330,7 +330,7 @@ def run_one_reusable_maze():
     
     maze_gold_value = g_maze_size * g_maze_size
     total_treasure = 0
-    max_reuses = 300
+    max_reuses = 200
     
     quick_print("=== 新迷宫 ===")
     quick_print("大小:", g_maze_size, "x", g_maze_size)
@@ -451,5 +451,7 @@ def farm_all_mazes():
     quick_print("剩余物质:", num_items(Items.Weird_Substance))
 
 # 执行主程序
+clear()
+set_world_size(8)
 farm_all_mazes()
 

@@ -1,6 +1,7 @@
-# The Farmer Was Replaced - 多无人机智能资源平衡种植脚本
-# 策略：将农场分区，每个无人机负责独立区域，并行收集资源
-# 优化：最大化无人机利用率，减少总时间
+# The Farmer Was Replaced - 多无人机智能资源平衡种植脚本（肥料版）
+# 策略：持久化无人机池，每个无人机独立循环工作
+# 优化：无人机持续运行，无需重复创建，最大化并行效率
+# 特性：伴生作物自动施肥，加速生长并获得奇异物质
 
 from farm_utils import goto_pos, generate_snake_path
 
@@ -13,8 +14,23 @@ TARGETS = {
     Items.Carrot: 500000000
 }
 
-# 伴生地图（全局共享，但每个无人机只处理自己区域）
-companion_map = {}
+# 创建共享数据源（用于无人机间通信）
+def create_shared_data():
+    return {
+        "companion_map": {},     # 伴生地图
+        "priority": 0,           # 当前优先级
+        "should_stop": False,    # 停止信号
+        "stats": {               # 统计数据
+            "harvested": 0,
+            "trees": 0,
+            "carrots": 0,
+            "grass": 0
+        }
+    }
+
+# 全局共享数据（通过 wait_for 机制实现真正的共享）
+shared_source = spawn_drone(create_shared_data)
+shared = wait_for(shared_source)
 
 # 获取优先级（使用乘法避免除法）
 def get_priority():
@@ -70,151 +86,251 @@ def plant_crop(crop_id):
     else:
         plant(Entities.Grass)
 
-# 无人机工作函数：处理一个区域
-def drone_farm_region(x_start, x_end, y_start, y_end, priority):
-    # 无人机负责一个矩形区域的种植和收割
-    harvested = 0
-    trees = 0
-    carrots = 0
-    grass = 0
+# 无人机持久工作函数：持续循环处理一个区域
+def drone_worker(region_id, x_start, x_end, y_start, y_end):
+    # 获取共享数据
+    data = wait_for(shared_source)
     
-    # 蛇形遍历区域
-    for y in range(y_start, y_end):
-        # 确定行方向
-        if (y - y_start) % 2 == 0:
-            x_range = range(x_start, x_end)
-        else:
-            x_range = range(x_end - 1, x_start - 1, -1)
+    # 缓存区域尺寸
+    width = x_end - x_start
+    height = y_end - y_start
+    
+    # 无限循环工作
+    while True:
+        # 检查是否需要停止
+        if data["should_stop"]:
+            break
         
-        for x in x_range:
-            # 移动到位置
-            goto_pos(x, y)
+        # 获取当前优先级
+        priority = data["priority"]
+        
+        # 本轮统计
+        local_harvested = 0
+        local_trees = 0
+        local_carrots = 0
+        local_grass = 0
+        local_fertilized = 0  # 施肥次数
+        
+        # 移动到区域起点
+        goto_pos(x_start, y_start)
+        
+        # 蛇形遍历区域
+        for row in range(height):
+            y = y_start + row
+            going_east = row % 2 == 0
             
-            # 收割
-            if can_harvest():
-                harvest()
-                harvested = harvested + 1
-            
-            # 检查是否有伴生需求（使用全局字典）
-            pos_key = y * SIZE + x
-            if pos_key in companion_map:
-                # 按照伴生需求种植
-                comp_type = companion_map[pos_key]
-                
-                if comp_type == Entities.Carrot:
-                    if get_ground_type() != Grounds.Soil:
-                        till()
-                    plant(Entities.Carrot)
-                    if get_water() < 0.5:
-                        if num_items(Items.Water) > 0:
-                            use_item(Items.Water)
-                    carrots = carrots + 1
-                elif comp_type == Entities.Tree:
-                    plant(Entities.Tree)
-                    trees = trees + 1
+            for col in range(width):
+                # 计算当前 x 坐标
+                if going_east:
+                    x = x_start + col
                 else:
-                    plant(Entities.Grass)
-                    grass = grass + 1
-            else:
-                # 按照策略种植
-                crop_id = decide_crop(x, y, priority)
-                plant_crop(crop_id)
+                    x = x_end - 1 - col
                 
-                # 统计
-                if crop_id == 1:
-                    trees = trees + 1
-                elif crop_id == 2:
-                    carrots = carrots + 1
+                # 收割
+                if can_harvest():
+                    harvest()
+                    local_harvested = local_harvested + 1
+                
+                # 检查伴生需求
+                pos_key = y * SIZE + x
+                companion_map = data["companion_map"]
+                has_companion = pos_key in companion_map
+                
+                if has_companion:
+                    # 按照伴生需求种植
+                    comp_type = companion_map[pos_key]
+                    
+                    if comp_type == Entities.Carrot:
+                        if get_ground_type() != Grounds.Soil:
+                            till()
+                        plant(Entities.Carrot)
+                        # 伴生作物施肥（加速生长+感染）
+                        if num_items(Items.Fertilizer) > 0:
+                            use_item(Items.Fertilizer)
+                            local_fertilized = local_fertilized + 1
+                        # 浇水
+                        if get_water() < 0.5:
+                            if num_items(Items.Water) > 0:
+                                use_item(Items.Water)
+                        local_carrots = local_carrots + 1
+                    elif comp_type == Entities.Tree:
+                        plant(Entities.Tree)
+                        # 伴生作物施肥
+                        if num_items(Items.Fertilizer) > 0:
+                            use_item(Items.Fertilizer)
+                            local_fertilized = local_fertilized + 1
+                        local_trees = local_trees + 1
+                    else:
+                        plant(Entities.Grass)
+                        # 伴生作物施肥
+                        if num_items(Items.Fertilizer) > 0:
+                            use_item(Items.Fertilizer)
+                            local_fertilized = local_fertilized + 1
+                        local_grass = local_grass + 1
                 else:
-                    grass = grass + 1
+                    # 按照策略种植（普通作物不施肥）
+                    crop_id = decide_crop(x, y, priority)
+                    plant_crop(crop_id)
+                    
+                    if crop_id == 1:
+                        local_trees = local_trees + 1
+                    elif crop_id == 2:
+                        local_carrots = local_carrots + 1
+                    else:
+                        local_grass = local_grass + 1
+                
+                # 记录新的伴生需求
+                comp = get_companion()
+                if comp != None:
+                    comp_type, comp_pos = comp
+                    cx, cy = comp_pos
+                    comp_key = cy * SIZE + cx
+                    companion_map[comp_key] = comp_type
+                
+                # 移动到下一个位置
+                if col < width - 1:
+                    if going_east:
+                        move(East)
+                    else:
+                        move(West)
             
-            # 记录伴生需求到全局地图
-            comp = get_companion()
-            if comp != None:
-                comp_type, comp_pos = comp
-                cx, cy = comp_pos
-                comp_key = cy * SIZE + cx
-                companion_map[comp_key] = comp_type
-    
-    # 返回统计
-    return (harvested, trees, carrots, grass)
+            # 移动到下一行
+            if row < height - 1:
+                move(North)
+        
+        # 更新共享统计（使用独立键避免竞态条件）
+        stats = data["stats"]
+        region_key = "region_" + str(region_id)
+        stats[region_key] = (local_harvested, local_trees, local_carrots, local_grass, local_fertilized)
 
-# 主循环（多无人机版本）
-def farm_cycle_mega():
-    priority = get_priority()
+# 动态计算区域划分（最大化无人机利用）
+def calculate_regions():
+    max_d = max_drones()
     
-    # 计算区域划分
-    drone_count = num_drones()
-    max_drones1 = max_drones()
-    
-    # 根据可用无人机数量划分区域
-    # 策略：将农场水平分割为若干条带
-    regions = []
-    
-    if max_drones1 >= 4:
-        # 4个或更多无人机：分成4个区域（2x2网格）
-        half_size = SIZE // 2
-        regions = [
-            (0, half_size, 0, half_size),           # 左下
-            (half_size, SIZE, 0, half_size),        # 右下
-            (0, half_size, half_size, SIZE),        # 左上
-            (half_size, SIZE, half_size, SIZE)      # 右上
+    # 根据最大无人机数量动态划分
+    if max_d >= 16:
+        # 16+ 无人机：4x4 网格
+        step = SIZE // 4
+        regions = []
+        for row in range(4):
+            for col in range(4):
+                x_start = col * step
+                if col < 3:
+                    x_end = (col + 1) * step
+                else:
+                    x_end = SIZE
+                y_start = row * step
+                if row < 3:
+                    y_end = (row + 1) * step
+                else:
+                    y_end = SIZE
+                regions.append((x_start, x_end, y_start, y_end))
+        return regions
+    elif max_d >= 9:
+        # 9-15 无人机：3x3 网格
+        step = SIZE // 3
+        regions = []
+        for row in range(3):
+            for col in range(3):
+                x_start = col * step
+                if col < 2:
+                    x_end = (col + 1) * step
+                else:
+                    x_end = SIZE
+                y_start = row * step
+                if row < 2:
+                    y_end = (row + 1) * step
+                else:
+                    y_end = SIZE
+                regions.append((x_start, x_end, y_start, y_end))
+        return regions
+    elif max_d >= 4:
+        # 4-8 无人机：2x2 网格
+        half = SIZE // 2
+        return [
+            (0, half, 0, half),
+            (half, SIZE, 0, half),
+            (0, half, half, SIZE),
+            (half, SIZE, half, SIZE)
         ]
-    elif max_drones1 >= 2:
-        # 2-3个无人机：水平分割
-        half_size = SIZE // 2
-        regions = [
-            (0, SIZE, 0, half_size),                # 下半部分
-            (0, SIZE, half_size, SIZE)              # 上半部分
+    elif max_d >= 2:
+        # 2-3 无人机：上下分割
+        half = SIZE // 2
+        return [
+            (0, SIZE, 0, half),
+            (0, SIZE, half, SIZE)
         ]
     else:
-        # 只有主无人机：整个农场
-        regions = [(0, SIZE, 0, SIZE)]
-    
-    # 启动无人机处理各个区域
+        # 单无人机：整个农场
+        return [(0, SIZE, 0, SIZE)]
+
+# 启动持久化无人机池
+def start_drone_pool():
+    regions = calculate_regions()
     drones = []
-    total_stats = [0, 0, 0, 0]  # harvested, trees, carrots, grass
     
-    quick_print("启动" + str(len(regions)) + "个区域任务")
+    quick_print("=== 启动无人机池 ===")
+    quick_print("区域数：" + str(len(regions)))
+    quick_print("最大无人机：" + str(max_drones()))
     
+    # 为每个区域启动持久化无人机
     for i in range(len(regions)):
         x_start, x_end, y_start, y_end = regions[i]
         
-        # 定义无人机任务函数
-        def create_task(xs, xe, ys, ye, p):
-            def task():
-                return drone_farm_region(xs, xe, ys, ye, p)
-            return task
+        # 创建无人机工作函数（闭包捕获参数）
+        def create_worker(rid, xs, xe, ys, ye):
+            def worker():
+                drone_worker(rid, xs, xe, ys, ye)
+            return worker
         
-        task_func = create_task(x_start, x_end, y_start, y_end, priority)
+        worker_func = create_worker(i, x_start, x_end, y_start, y_end)
         
-        if i < len(regions) - 1:
-            # 尝试生成无人机
-            drone = spawn_drone(task_func)
-            if drone:
-                drones.append(drone)
-                quick_print("区域" + str(i+1) + ": 无人机")
-            else:
-                # 无法生成更多无人机，主无人机执行
-                stats = task_func()
-                for j in range(4):
-                    total_stats[j] = total_stats[j] + stats[j]
-                quick_print("区域" + str(i+1) + ": 主机")
+        # 生成无人机
+        drone = spawn_drone(worker_func)
+        if drone:
+            drones.append(drone)
+            quick_print("区域" + str(i) + ": 无人机已启动")
         else:
-            # 最后一个区域由主无人机执行
-            stats = task_func()
-            for j in range(4):
-                total_stats[j] = total_stats[j] + stats[j]
-            quick_print("区域" + str(i+1) + ": 主机")
+            quick_print("区域" + str(i) + ": 无法生成（达到上限）")
+            break
     
-    # 等待所有无人机完成并收集结果
-    for i in range(len(drones)):
-        stats = wait_for(drones[i])
-        if stats:
-            for j in range(4):
-                total_stats[j] = total_stats[j] + stats[j]
+    quick_print("成功启动 " + str(len(drones)) + " 个持久无人机")
+    return drones
+
+# 收集统计数据
+def collect_stats():
+    stats = shared["stats"]
+    total_harvested = 0
+    total_trees = 0
+    total_carrots = 0
+    total_grass = 0
+    total_fertilized = 0
     
-    # 显示统计
+    # 遍历所有区域统计
+    for key in stats:
+        if key != "harvested" and key != "trees" and key != "carrots" and key != "grass":
+            region_stats = stats[key]
+            if region_stats:
+                # 兼容旧版本（4个值）和新版本（5个值）
+                if len(region_stats) == 5:
+                    h, t, c, g, f = region_stats
+                    total_fertilized = total_fertilized + f
+                else:
+                    h, t, c, g = region_stats
+                total_harvested = total_harvested + h
+                total_trees = total_trees + t
+                total_carrots = total_carrots + c
+                total_grass = total_grass + g
+    
+    return (total_harvested, total_trees, total_carrots, total_grass, total_fertilized)
+
+# 主循环：监控和更新优先级
+def main_loop():
+    # 获取当前优先级
+    priority = get_priority()
+    shared["priority"] = priority
+    
+    # 显示优先级
     if priority == 0:
         desc = "草"
     elif priority == 1:
@@ -222,11 +338,7 @@ def farm_cycle_mega():
     else:
         desc = "萝"
     
-    harvested, trees, carrots, grass = total_stats
-    quick_print(desc + " 收:" + str(harvested) + 
-               " 树:" + str(trees) +
-               " 萝:" + str(carrots) +
-               " 草:" + str(grass))
+    quick_print("优先级: " + desc)
 
 # 显示状态
 def show_status():
@@ -241,10 +353,33 @@ def show_status():
 
 # 主程序
 clear()
-quick_print("=== 多无人机智能农场 ===")
+quick_print("=== 持久化多无人机农场 V2 ===")
 quick_print("农场大小：" + str(SIZE) + "x" + str(SIZE))
 quick_print("最大无人机：" + str(max_drones()))
 
+# 启动持久化无人机池（只启动一次）
+drones = start_drone_pool()
+
+# 主循环：只负责监控和更新优先级
+cycle_count = 0
 while True:
+    cycle_count = cycle_count + 1
+    
+    # 显示状态
     show_status()
-    farm_cycle_mega()
+    
+    # 更新优先级
+    main_loop()
+    
+    # 每隔一段时间显示统计（可选）
+    if cycle_count % 5 == 0:
+        harvested, trees, carrots, grass, fertilized = collect_stats()
+        quick_print("统计 - 收:" + str(harvested) + 
+                   " 树:" + str(trees) + 
+                   " 萝:" + str(carrots) + 
+                   " 草:" + str(grass) +
+                   " 肥:" + str(fertilized))
+    
+    # 等待一段时间再检查（让无人机工作）
+    for i in range(10):
+        do_a_flip()

@@ -80,7 +80,10 @@ if not spawn_drone(task):
 
 ### 重要限制
 
-#### 1. 无共享内存
+#### 1. 内存隔离与共享（已验证）
+
+**基本规则：通过闭包捕获的变量会被复制，无人机间不共享**
+
 ```python
 # ❌ 错误：无人机不共享全局变量
 x = 0
@@ -90,15 +93,136 @@ def increment():
     x += 1
 
 wait_for(spawn_drone(increment))
-print(x)  # 仍然是 0！
+print(x)  # 仍然是 0！无人机修改了自己的副本
 
-# ✅ 正确：通过返回值传递数据
-def get_value():
-    return 42
+# ❌ 错误：列表也不共享（会被复制）
+shared_list = [0, 0, 0]
 
-drone = spawn_drone(get_value)
-result = wait_for(drone)  # result = 42
+def modify_list():
+    shared_list[0] = 100  # 只修改副本，不影响原列表
+
+drone = spawn_drone(modify_list)
+wait_for(drone)
+print(shared_list)  # 仍然是 [0, 0, 0]！
 ```
+
+**高级技巧：通过 wait_for() 实现共享内存（重大发现！）**
+
+多个无人机可以通过 `wait_for()` 同一个源无人机来获取**共享的引用类型对象**！
+
+```python
+# ✅ 共享内存模式：创建共享数据源
+def create_shared():
+    return []  # 返回一个列表
+
+source = spawn_drone(create_shared)
+
+# 多个工作者通过 wait_for 获取同一个列表引用
+def worker():
+    data = wait_for(source)  # 所有 worker 获得同一个列表！
+    data.append(num_drones())  # 修改会相互可见
+    print(num_drones(), data)
+
+# 启动多个工作者
+for i in range(5):
+    spawn_drone(worker)
+    do_a_flip()
+
+# 输出示例：
+# 2 [2]
+# 3 [2,3]
+# 4 [2,3,4]
+# 5 [2,3,4,5]
+# 6 [2,3,4,5,6]
+# 证明：所有 worker 共享同一个列表！
+```
+
+**共享字典示例（更实用）**
+
+```python
+# 创建共享统计字典
+def create_stats():
+    return {
+        "grass": 0,
+        "trees": 0,
+        "total": 0
+    }
+
+stats_source = spawn_drone(create_stats)
+
+# 工作者更新共享统计
+def count_zone():
+    local_grass = 0
+    local_trees = 0
+    
+    # 扫描区域
+    for i in range(25):
+        entity = get_entity_type()
+        if entity == Entities.Grass:
+            local_grass += 1
+        elif entity == Entities.Tree:
+            local_trees += 1
+        move(East)
+    
+    # 更新共享统计
+    stats = wait_for(stats_source)
+    stats["grass"] += local_grass
+    stats["trees"] += local_trees
+    stats["total"] += 25
+    
+    return local_grass + local_trees
+
+# 启动多个扫描器
+drones = []
+for i in range(4):
+    drone = spawn_drone(count_zone)
+    if drone:
+        drones.append(drone)
+
+# 等待完成
+for drone in drones:
+    wait_for(drone)
+
+# 获取最终统计
+final_stats = wait_for(stats_source)
+quick_print("Total grass:", final_stats["grass"])
+quick_print("Total trees:", final_stats["trees"])
+```
+
+**⚠️ 重要警告：竞态条件风险**
+
+```python
+# ❌ 危险：竞态条件
+def unsafe():
+    data = wait_for(source)
+    count = data["count"]  # 读取
+    count += 1             # 计算
+    data["count"] = count  # 写入 - 可能覆盖其他无人机的修改
+
+# ✅ 较安全：原子操作
+def safer():
+    data = wait_for(source)
+    data["count"] += 1  # 单步操作
+
+# ✅ 最安全：只追加
+def safest():
+    data = wait_for(source)
+    data.append(result)  # 追加操作
+
+# ✅ 最安全：使用独立键
+def best():
+    data = wait_for(source)
+    drone_id = num_drones()
+    data[drone_id] = result  # 每个无人机有自己的键
+```
+
+**使用建议**
+
+- ✅ **优先使用返回值通信**：大多数情况下更安全简单
+- ⚠️ **谨慎使用共享内存**：只在需要实时协作时使用
+- ✅ **只追加不修改**：使用 `append()` 而不是修改现有值
+- ✅ **使用独立键**：每个无人机操作不同的字典键
+- ❌ **避免读-修改-写**：容易产生竞态条件
 
 #### 2. 竞态条件
 ```python

@@ -169,6 +169,11 @@ count = total // divisor
 - 不要使用 `lambda`
 - 不要使用 `yield`
 - 不要使用 `int()`, `float()`, `bool()` 等类型转换（除非确认支持）
+- 禁止使用三元表达式：x = a if condition else b
+- 禁止使用 lambda 函数
+- 禁止使用字典的 .items(), .keys(), .values() 方法
+- 所有条件赋值都使用完整的 if-else 语句
+- 禁止quick_print中使用*
 - 只使用已确认解锁的功能
 - 保持代码清晰，注释简洁
 
@@ -203,6 +208,7 @@ for key in my_dict:
     value = my_dict[key]
     # 使用 key 和 value
 ```
+
 
 ## 运算符使用
 - ✅ 算术：`+`, `-`, `*`, `/`, `//`, `%`, `**`

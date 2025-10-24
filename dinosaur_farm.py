@@ -329,4 +329,5 @@ def run_dinosaur_farm():
 # ============================================
 
 # 运行恐龙养殖
-run_dinosaur_farm()
+while True:
+    run_dinosaur_farm()

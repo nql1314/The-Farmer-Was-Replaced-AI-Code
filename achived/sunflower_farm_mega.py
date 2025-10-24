@@ -38,24 +38,20 @@ def add_to_tracker(tracker, petals, x, y):
 
 def get_tracker_count(tracker, key):
     # 获取指定集合的数量
-    return len(tracker[key]) - 5
+    return len(tracker[key])
 
 def get_total_count(tracker):
     # 获取所有向日葵总数
     total = 0
     for key in tracker:
-        total = total + len(tracker[key]) - 5
+        total = total + len(tracker[key])
     return total
 
 def clear_tracker(tracker):
     # 清空所有集合
     for key in tracker:
-        tracker[key] = [(0, 0),(0, 0),(0, 0),(0, 0),(0, 0)]
+        tracker[key] = []
 
-def position_to_key(positions):
-    if len(positions) <= 5:
-        return None
-    return positions.pop()
 # ====================
 # 批次分配：蛇形条带分配
 # ====================
@@ -143,34 +139,18 @@ def drone_scan_and_harvest_15(batch, tracker_source):
     
     return (scanned, harvested_15)
 
-def drone_harvest_from_queue(tracker_source, key):
-    # 无人机：从共享队列中持续取位置并收获
-    # 动态任务队列机制：
-    # 1. 无人机持续从共享队列中pop位置
-    # 2. 移动到位置并收获
-    # 3. 如果已被其他无人机收获，自动跳过
-    # 4. 直到队列为空
-    # 优势：负载自动平衡、容错性强、无需预分配批次
+def drone_harvest_batch(positions):
+    # 无人机：收获一批位置
     # 返回：实际收获数量
-    tracker = wait_for(tracker_source)
     harvested = 0
     
-    while True:
-        # 从队列中取出一个位置
-        positions = tracker[key]
+    for pos in positions:
+        x, y = pos
+        goto_pos(x, y)
         
-        pos = position_to_key(positions)
-        if pos is None:
-            break
-        
-        # 移动到位置
-        goto_pos(pos[0], pos[1])
-        
-        # 检查是否还是向日葵（可能已被其他无人机收获）
         if get_entity_type() == Entities.Sunflower and can_harvest():
             harvest()
             harvested = harvested + 1
-        # 如果已被收获，跳过即可（容错机制）
     
     return harvested
 
@@ -250,7 +230,7 @@ def stage_scan_and_harvest_15(tracker_source):
     return (total_scanned, total_harvested_15)
 
 def stage_harvest_by_petals(tracker_source, petals_list):
-    # 阶段3：按花瓣数依次收获（使用动态队列）
+    # 阶段3：按花瓣数依次收获
     # petals_list: 要收获的花瓣数列表，如 [14, 13, 12, ...]
     # 返回：总收获数
     
@@ -270,42 +250,56 @@ def stage_harvest_by_petals(tracker_source, petals_list):
         if count == 0:
             continue
         
-        # 启动所有可用无人机，让它们从共享队列中取任务
+        # 并行收获
         available = max_drones() + 1
+        batch_size = count // available
+        if batch_size == 0:
+            batch_size = 1
+        
+        batches = []
+        for i in range(0, count, batch_size):
+            batches.append(positions[i:i + batch_size])
+        
+        if len(batches) > available:
+            # 合并多余的批次
+            for i in range(available, len(batches)):
+                for pos in batches[i]:
+                    batches[available - 1].append(pos)
+            batches = batches[:available]
         
         drones = []
         results = []
         
-        for i in range(available):
-            def create_task(src, k):
+        for i in range(len(batches)):
+            def create_task(b):
                 def task():
-                    return drone_harvest_from_queue(src, k)
+                    return drone_harvest_batch(b)
                 return task
             
-            task = create_task(tracker_source, key)
+            task = create_task(batches[i])
             
-            if i < available - 1:
+            if i < len(batches) - 1:
                 drone = spawn_drone(task)
                 if drone:
                     drones.append(drone)
                 else:
-                    # 如果无法生成无人机，主无人机自己执行
                     results.append(task())
             else:
-                # 最后一个任务主无人机自己执行
                 results.append(task())
         
-        # 等待所有无人机完成
         for drone in drones:
             results.append(wait_for(drone))
         
-        # 统计本轮收获
+        # 统计
         harvested = 0
         for result in results:
             harvested = harvested + result
         
         total_harvested = total_harvested + harvested
-        quick_print("本轮收获 " + str(petals) + " 瓣 " + str(harvested) + " 株")
+        
+        # 清空该集合
+        tracker[key] = []
+    
     return total_harvested
 
 # ====================

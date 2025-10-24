@@ -160,7 +160,7 @@ def drone_harvest_from_queue(tracker_source, key):
         positions = tracker[key]
         
         pos = position_to_key(positions)
-        if pos is None:
+        if pos == None:
             break
         
         # 移动到位置
@@ -263,7 +263,7 @@ def stage_harvest_by_petals(tracker_source, petals_list):
             key = str(petals)
         else:
             key = "low"
-        
+        power_before = num_items(Items.Power)
         positions = tracker[key]
         count = len(positions)
         
@@ -294,6 +294,7 @@ def stage_harvest_by_petals(tracker_source, petals_list):
             else:
                 # 最后一个任务主无人机自己执行
                 results.append(task())
+                
         
         # 等待所有无人机完成
         for drone in drones:
@@ -305,7 +306,9 @@ def stage_harvest_by_petals(tracker_source, petals_list):
             harvested = harvested + result
         
         total_harvested = total_harvested + harvested
-        quick_print("本轮收获 " + str(petals) + " 瓣 " + str(harvested) + " 株")
+        power_after = num_items(Items.Power)
+        power_gained = power_after - power_before
+        quick_print("本轮收获 " + str(petals) + " 瓣 " + str(harvested) + " 株，能量 +" + str(power_gained))
     return total_harvested
 
 # ====================
@@ -388,3 +391,4 @@ while True:
     farming_cycle(tracker_source)
     
     quick_print("")
+    

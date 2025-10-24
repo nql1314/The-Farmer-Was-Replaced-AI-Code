@@ -500,6 +500,9 @@ def run_dinosaur_astar():
     quick_print("目标长度: " + str(TARGET_LENGTH))
     quick_print("地图大小: " + str(shared["world_size"]) + "x" + str(shared["world_size"]))
     
+    # 准备农场
+    clear()
+    
     # 装备恐龙帽
     quick_print("装备恐龙帽...")
     change_hat(Hats.Dinosaur_Hat)
@@ -545,7 +548,5 @@ def run_dinosaur_astar():
 # ============================================
 # 执行
 # ============================================
-# 准备农场
-clear()
-set_world_size(10)
+
 run_dinosaur_astar()

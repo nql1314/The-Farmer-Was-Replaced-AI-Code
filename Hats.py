@@ -1,0 +1,1 @@
+change_hat(Hats.Brown_Hat)

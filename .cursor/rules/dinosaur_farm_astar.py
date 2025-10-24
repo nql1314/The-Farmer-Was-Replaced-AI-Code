@@ -92,15 +92,11 @@ def pq_clear(shared):
 # ============================================
 
 def manhattan_distance(shared, x1, y1, x2, y2):
-    # 曼哈顿距离（考虑环形地图）
+    # 曼哈顿距离
     world_size = shared["world_size"]
     
     dx = abs(x1 - x2)
     dy = abs(y1 - y2)
-    
-    # 环形地图优化
-    dx = min(dx, world_size - dx)
-    dy = min(dy, world_size - dy)
     
     return dx + dy
 
@@ -123,24 +119,25 @@ def is_position_safe(shared, x, y, ignore_tail):
 
 def get_neighbors(shared, x, y):
     # 获取相邻位置（上下左右）
+    # 重要：恐龙地图不是环形的，需要检查边界
     world_size = shared["world_size"]
     neighbors = []
     
-    # 东
-    nx = (x + 1) % world_size
-    neighbors.append((nx, y, East))
+    # 东（右）
+    if x + 1 < world_size:
+        neighbors.append((x + 1, y, East))
     
-    # 西
-    nx = (x - 1) % world_size
-    neighbors.append((nx, y, West))
+    # 西（左）
+    if x - 1 >= 0:
+        neighbors.append((x - 1, y, West))
     
-    # 北
-    ny = (y + 1) % world_size
-    neighbors.append((x, ny, North))
+    # 北（上）
+    if y + 1 < world_size:
+        neighbors.append((x, y + 1, North))
     
-    # 南
-    ny = (y - 1) % world_size
-    neighbors.append((x, ny, South))
+    # 南（下）
+    if y - 1 >= 0:
+        neighbors.append((x, y - 1, South))
     
     return neighbors
 
@@ -162,7 +159,7 @@ def astar_search(shared, start_x, start_y, goal_x, goal_y, ignore_tail):
     pq_clear(shared)
     shared["came_from"] = {}
     shared["g_score"] = {}
-    
+     
     # 添加起点
     start_pos = (start_x, start_y)
     pq_push(shared, start_pos, 0)
@@ -320,26 +317,39 @@ def follow_tail(shared, head_x, head_y):
 
 def find_safe_direction(shared, head_x, head_y):
     # 尝试找到任意安全的方向
+    # 重要：恐龙地图不是环形的，需要检查边界
     world_size = shared["world_size"]
     directions = [North, East, South, West]
     
     for direction in directions:
-        # 计算目标位置
-        if direction == East:
-            target_x = (head_x + 1) % world_size
-            target_y = head_y
-        elif direction == West:
-            target_x = (head_x - 1) % world_size
-            target_y = head_y
-        elif direction == North:
-            target_x = head_x
-            target_y = (head_y + 1) % world_size
-        else:  # South
-            target_x = head_x
-            target_y = (head_y - 1) % world_size
+        # 计算目标位置（检查边界）
+        target_x = head_x
+        target_y = head_y
+        valid = True
         
-        # 检查是否安全
-        if is_position_safe(shared, target_x, target_y, True):
+        if direction == East:
+            if head_x + 1 < world_size:
+                target_x = head_x + 1
+            else:
+                valid = False
+        elif direction == West:
+            if head_x - 1 >= 0:
+                target_x = head_x - 1
+            else:
+                valid = False
+        elif direction == North:
+            if head_y + 1 < world_size:
+                target_y = head_y + 1
+            else:
+                valid = False
+        else:  # South
+            if head_y - 1 >= 0:
+                target_y = head_y - 1
+            else:
+                valid = False
+        
+        # 检查是否有效且安全
+        if valid and is_position_safe(shared, target_x, target_y, True):
             return direction
     
     # 所有方向都不安全
@@ -369,63 +379,75 @@ def grow_tail_with_astar(shared, target_length):
     failed_attempts = 0
     max_failed = 100
     follow_tail_mode = False
-    
+    global apple_x
+    global apple_y
+    apple_x = 0
+    apple_y = 0
     # 初始化蛇身（只有蛇头）
-    shared["snake_body"] = [(get_pos_x(), get_pos_y())]
+    head_x = get_pos_x()
+    head_y = get_pos_y()
+    shared["snake_body"] = [(head_x, head_y)]
+    
+    # 重要：恐龙帽机制详解
+    # 1. 装备恐龙帽后，第一个苹果在脚下生成
+    # 2. 只有站在苹果上时，measure() 才返回下一个苹果的位置
+    # 3. 离开苹果后，旧苹果消失，新苹果在预告位置出现
+    # 4. 移动回到新苹果位置才算"吃到"
+    
+    # 策略：开局不需要特殊处理，直接开始主循环
+    # 因为：
+    # - 第一次循环会在苹果上获取下一个位置
+    # - 移动离开后，新苹果出现
+    # - 移动回去吃掉新苹果
+    
+    quick_print("初始化完成，开始寻路吃苹果...")
     
     while current_length < target_length and failed_attempts < max_failed:
         # 获取当前位置
         head_x = get_pos_x()
         head_y = get_pos_y()
         
-        # 获取苹果位置
-        apple_x = None
-        apple_y = None
+        # 关键机制（重要！）：
+        # - 只有站在苹果上时，measure() 才返回下一个苹果的位置
+        # - 不在苹果上时，measure() 不返回任何有效信息
+        # - 策略：必须先找到当前苹果并站上去，才能知道下一个在哪
         
-        if get_entity_type() == Entities.Apple:
-            apple_pos = measure()
+        # 检查是否站在苹果上
+        on_apple = (get_entity_type() == Entities.Apple)
+        
+        if on_apple:
+            # 站在苹果上，可以获取下一个苹果的位置
+            if VERBOSE and current_length == 0:
+                quick_print("站在开局苹果上，获取下一个位置...")
+            
+            # 获取下一个苹果的位置
+            apple_pos = None
+            while apple_pos == None:
+                apple_pos = measure()
+                if apple_pos == None:
+                    # 苹果无法生成（位置被占），等待
+                    do_a_flip()
             apple_x = apple_pos[0]
             apple_y = apple_pos[1]
-        else:
-            # 找不到苹果
-            failed_attempts += 1
-            if VERBOSE:
-                quick_print("警告: 找不到苹果，尝试移动...")
-            
-            # 尝试安全移动
-            safe_dir = find_safe_direction(shared, head_x, head_y)
-            if safe_dir != None:
-                if move(safe_dir):
-                    update_snake_body(shared, get_pos_x(), get_pos_y(), False)
-            else:
-                quick_print("错误: 无法移动，游戏结束")
-                break
-            
-            continue
+            if VERBOSE and current_length == 0:
+                quick_print("下一个苹果在: (" + str(apple_x) + ", " + str(apple_y) + ")")
         
-        # 重置失败计数
-        failed_attempts = 0
-        
-        # 决定移动方向
-        next_direction = None
-        
-        # 检查是否安全吃苹果（尾随策略）
+        # 使用尾随策略检查是否安全去下一个苹果
         if is_safe_to_eat_apple(shared, apple_x, apple_y, head_x, head_y):
-            # 安全，使用 A* 找路径
+            # 安全，使用 A* 找路径到下一个苹果位置
             path = astar_search(shared, head_x, head_y, apple_x, apple_y, True)
             
             if path != None and len(path) > 0:
                 next_direction = path[0]
                 follow_tail_mode = False
             else:
-                # 找不到路径，进入跟随模式
+                # 找不到路径，跟随蛇尾
                 next_direction = follow_tail(shared, head_x, head_y)
                 follow_tail_mode = True
         else:
             # 不安全，跟随蛇尾
             if not follow_tail_mode and VERBOSE:
-                quick_print("吃苹果不安全，切换到跟随蛇尾模式...")
-            
+                quick_print("去下一个苹果不安全，跟随蛇尾...")
             next_direction = follow_tail(shared, head_x, head_y)
             follow_tail_mode = True
         
@@ -433,34 +455,21 @@ def grow_tail_with_astar(shared, target_length):
         if next_direction == None:
             next_direction = find_safe_direction(shared, head_x, head_y)
         
-        # 执行移动
+        # 执行移动（离开当前苹果）
         if next_direction != None:
             if move(next_direction):
                 new_x = get_pos_x()
                 new_y = get_pos_y()
                 
-                # 检查是否吃到苹果
-                ate_apple = get_entity_type() != Entities.Apple and (new_x == apple_x and new_y == apple_y)
-                
-                # 更新蛇身
-                update_snake_body(shared, new_x, new_y, ate_apple)
-                
-                # 如果吃到苹果
-                if new_x == apple_x and new_y == apple_y:
-                    current_length += 1
-                    shared["apples_eaten"] += 1
-                    
-                    if VERBOSE and current_length % 5 == 0:
-                        quick_print("已吃苹果: " + str(current_length) + "/" + 
-                                   str(target_length))
-                    
-                    follow_tail_mode = False
+                # 离开苹果，蛇尾移动（未吃到新苹果）
+                # 此时旧苹果消失，新苹果在 apple_pos 位置出现
+                update_snake_body(shared, new_x, new_y, False)
             else:
                 quick_print("错误: 移动失败")
-                break
+                failed_attempts += 1
         else:
-            quick_print("错误: 找不到可移动的方向")
-            break
+            quick_print("错误: 找不到移动方向")
+            failed_attempts += 1
     
     quick_print("尾巴增长完成! 最终长度: " + str(current_length))
     return current_length
@@ -468,25 +477,11 @@ def grow_tail_with_astar(shared, target_length):
 def calculate_bones(length):
     return length * length
 
-def print_efficiency_table():
-    quick_print("======================")
-    quick_print("A* 恐龙效率预测")
-    quick_print("======================")
-    quick_print("长度 | 骨头数")
-    
-    for length in [10, 16, 20, 25, 36, 49, 64, 81, 100]:
-        bones = calculate_bones(length)
-        quick_print(str(length) + " | " + str(bones))
-    
-    quick_print("======================")
-
 # ============================================
 # 主函数（使用共享内存架构）
 # ============================================
 
 def run_dinosaur_astar():
-    # 打印效率表
-    print_efficiency_table()
     
     # 创建共享数据源
     shared_data_source = spawn_drone(create_shared_data)
@@ -548,5 +543,5 @@ def run_dinosaur_astar():
 # ============================================
 # 执行
 # ============================================
-
+set_world_size(10)
 run_dinosaur_astar()

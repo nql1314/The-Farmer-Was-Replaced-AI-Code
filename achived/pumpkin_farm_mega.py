@@ -405,6 +405,7 @@ def stage_verify_and_fix(unverified_source):
     remaining = get_shared_set_size(unverified_set)
     
     quick_print("已验证: " + str(total_verified) + " | 已修复: " + str(total_fixed) + " | 剩余: " + str(remaining))
+    quick_print("剩余南瓜位置: " + str(shared_set_to_list(unverified_set)))
     return True
 
 # ====================

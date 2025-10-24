@@ -37,22 +37,25 @@ def add_to_tracker(tracker, petals, x, y):
     tracker[key].append((x, y))
 
 def get_tracker_count(tracker, key):
-    # 获取指定集合的数量
+    # 获取指定集合的数量（减去5个占位元素）
     return len(tracker[key]) - 5
 
 def get_total_count(tracker):
-    # 获取所有向日葵总数
+    # 获取所有向日葵总数（减去占位元素）
     total = 0
     for key in tracker:
         total = total + len(tracker[key]) - 5
     return total
 
 def clear_tracker(tracker):
-    # 清空所有集合
+    # 清空所有集合（保留5个占位元素）
+    # 技巧：使用5个占位元素避免频繁的空判断
     for key in tracker:
         tracker[key] = [(0, 0),(0, 0),(0, 0),(0, 0),(0, 0)]
 
 def position_to_key(positions):
+    # 从队列中取位置（如果只剩占位元素则返回None）
+    # 优化：保持5个占位元素，避免竞态条件下的重复检查
     if len(positions) <= 5:
         return None
     return positions.pop()
@@ -101,7 +104,7 @@ def split_snake_batches(num_batches):
 # ====================
 
 def drone_plant_batch(batch):
-    # 无人机：种植一批位置
+    # 无人机：种植一批位置，并浇水到 >0.75
     for pos in batch:
         x, y = pos
         goto_pos(x, y)
@@ -113,6 +116,13 @@ def drone_plant_batch(batch):
         # 翻土（向日葵需要土壤）
         if get_ground_type() != Grounds.Soil:
             till()
+        
+        # 浇水到 >0.75（5倍生长速度）
+        while get_water() < 0.75:
+            if num_items(Items.Water) > 0:
+                use_item(Items.Water)
+            else:
+                break
         
         # 种植向日葵
         plant(Entities.Sunflower)
@@ -204,6 +214,16 @@ def stage_plant():
     
     for drone in drones:
         wait_for(drone)
+    
+    # 种植完成后等待所有向日葵成熟
+    # 向日葵基础生长时间：5.6-8.4秒
+    # 含水量0.75时：生长速度 = 1 + 4*0.75 = 4倍
+    # 最慢成熟时间：8.4 / 4 = 2.1秒
+    # 为保险起见，等待3秒
+    quick_print("等待向日葵成熟...")
+    start_wait = get_time()
+    while get_time() - start_wait < 3:
+        do_a_flip()
 
 def stage_scan_and_harvest_15(tracker_source):
     # 阶段2：并行扫描，同时收获15瓣

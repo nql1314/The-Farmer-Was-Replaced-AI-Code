@@ -19,6 +19,9 @@ PATH = {
     (1, 1): West, (0, 1): South
 }
 
+WATER_THRESHOLD = 0.9
+WATER_COUNT = 10
+
 def create_shared():
     return {'stop':False,'0,7':{'ready':False},'0,19':{'ready':False},'0,26':{'ready':False},
     '7,0':{'ready':False},'7,7':{'ready':False},'7,19':{'ready':False},'7,26':{'ready':False},
@@ -69,7 +72,7 @@ def create_worker_left(region_x, region_y):
                 if not can_harvest():
                     plant(Entities.Pumpkin)
                     unverified.append((current_x, current_y))
-                    if num_items(Items.Water) > 10 and get_water() < 0.8:
+                    if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                 move(PATH[(current_x - region_x, current_y - region_y)])
             
@@ -86,18 +89,21 @@ def create_worker_left(region_x, region_y):
                     if can_harvest():
                         pass
                     else:
-                        if get_water() < 0.8:
+                        if get_water() < WATER_THRESHOLD:
                             use_item(Items.Water)
                         while get_entity_type() == Entities.Pumpkin and not can_harvest():
                             if shared["stop"]:
                                 return
-                            if num_items(Items.Fertilizer) > 0:
-                                use_item(Items.Fertilizer)
+                            use_item(Items.Fertilizer)
                         if get_entity_type() == Entities.Dead_Pumpkin:
                             plant(Entities.Pumpkin)
+                            if get_water() < WATER_THRESHOLD:
+                                use_item(Items.Water)
                             unverified.append((get_pos_x(), get_pos_y()))
                 elif entity == Entities.Dead_Pumpkin:
                     plant(Entities.Pumpkin)
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
                     unverified.append((get_pos_x(), get_pos_y()))
             
             # 同步收获
@@ -105,8 +111,6 @@ def create_worker_left(region_x, region_y):
                 while not region_data["ready"]:
                     if shared["stop"]:
                         return
-                for i in range(98):
-                    pass
                 harvest()
                 if num_items(Items.Pumpkin) >= 200000000:
                     shared["stop"] = True
@@ -153,10 +157,9 @@ def create_worker_right(region_x, region_y):
                 if not can_harvest():
                     plant(Entities.Pumpkin)
                     unverified.append((current_x, current_y))
-                    if num_items(Items.Water) > 10 and get_water() < 0.8:
+                    if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                 move(PATH[(current_x - start_x, current_y - region_y)])
-            failed_count = 0
             # 阶段3：验证和补种
             while unverified:
                 if shared["stop"]:
@@ -170,18 +173,21 @@ def create_worker_right(region_x, region_y):
                     if can_harvest():
                         pass
                     else:
-                        if get_water() < 0.8:
+                        if get_water() < WATER_THRESHOLD:
                             use_item(Items.Water)
                         while get_entity_type() == Entities.Pumpkin and not can_harvest():
                             if shared["stop"]:
                                 return
-                            if num_items(Items.Fertilizer) > 0:
-                                use_item(Items.Fertilizer)
+                            use_item(Items.Fertilizer)
                         if get_entity_type() == Entities.Dead_Pumpkin:
                             plant(Entities.Pumpkin)
+                            if get_water() < WATER_THRESHOLD:
+                                use_item(Items.Water)
                             unverified.append((get_pos_x(), get_pos_y()))
                 elif entity == Entities.Dead_Pumpkin:
                     plant(Entities.Pumpkin)
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
                     unverified.append((get_pos_x(), get_pos_y()))
             
             # 同步收获
@@ -228,7 +234,7 @@ def do_work_main():
             if not can_harvest():
                 plant(Entities.Pumpkin)
                 unverified.append((current_x, current_y))
-                if num_items(Items.Water) > 10 and get_water() < 0.8:
+                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
             move(PATH[(current_x - region_x, current_y - region_y)])
 
@@ -245,7 +251,7 @@ def do_work_main():
                 if can_harvest():
                     pass
                 else:
-                    if get_water() < 0.8:
+                    if get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                     while get_entity_type() == Entities.Pumpkin and not can_harvest():
                         if shared["stop"]:
@@ -253,9 +259,13 @@ def do_work_main():
                         use_item(Items.Fertilizer)
                     if get_entity_type() == Entities.Dead_Pumpkin:
                         plant(Entities.Pumpkin)
+                        if get_water() < WATER_THRESHOLD:
+                            use_item(Items.Water)
                         unverified.append((get_pos_x(), get_pos_y()))
             elif entity == Entities.Dead_Pumpkin:
                 plant(Entities.Pumpkin)
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
                 unverified.append((get_pos_x(), get_pos_y()))
         
         # 同步收获
@@ -263,8 +273,6 @@ def do_work_main():
             if shared["stop"]:
                 return
         if not shared["stop"]:
-            for i in range(98):
-                pass
             harvest()
             region_data["ready"] = False
             if num_items(Items.Pumpkin) >= 200000000:

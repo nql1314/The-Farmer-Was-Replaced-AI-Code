@@ -20,7 +20,11 @@ PATH = {
 }
 
 def create_shared():
-    return {"stop": False}
+    return {'stop':False,'0,7':{'ready':False},'0,19':{'ready':False},'0,26':{'ready':False},
+    '7,0':{'ready':False},'7,7':{'ready':False},'7,19':{'ready':False},'7,26':{'ready':False},
+    '19,0':{'ready':False},'19,7':{'ready':False},'19,19':{'ready':False},'19,26':{'ready':False},
+    '26,0':{'ready':False},'26,7':{'ready':False},'26,19':{'ready':False},'26,26':{'ready':False},
+    '0,0':{'ready':False}}
 
 
 def create_worker(region_x, region_y, is_left):
@@ -28,9 +32,7 @@ def create_worker(region_x, region_y, is_left):
         shared = wait_for(memory_source)
         region_key = str(region_x) + "," + str(region_y)
         
-        if region_key not in shared:
-            shared[region_key] = {"ready": False}
-        
+
         region_data = shared[region_key]
         
         if is_left:
@@ -59,10 +61,6 @@ def create_worker(region_x, region_y, is_left):
                     till()
                 plant(Entities.Pumpkin)
                 move(PATH[(get_pos_x() - start_x, get_pos_y() - region_y)])
-            if get_ground_type() != Grounds.Soil:
-                till()
-            plant(Entities.Pumpkin)
-            
             # 阶段2：扫描未成熟南瓜
             unverified = []
             for direction in PATH:
@@ -138,9 +136,6 @@ spawn_drone(create_worker(region_x, region_y, False))
 # 主无人机执行第一个区域的左半边工作
 shared = wait_for(memory_source)
 region_key = str(region_x) + "," + str(region_y)
-
-if region_key not in shared:
-    shared[region_key] = {"ready": False}
 
 region_data = shared[region_key]
 

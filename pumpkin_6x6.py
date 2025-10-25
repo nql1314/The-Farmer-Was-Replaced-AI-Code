@@ -135,6 +135,7 @@ def create_worker_right(region_x, region_y):
             # 阶段3：验证和补种
             quick_print("unverified count: " + str(len(unverified)))
             while unverified:
+                quick_print("start verify")
                 if shared["stop"]:
                     return
                 target_x, target_y = unverified[0]
@@ -152,26 +153,19 @@ def create_worker_right(region_x, region_y):
                             if shared["stop"]:
                                 return
                             use_item(Items.Fertilizer)
-                        if can_harvest():
-                            quick_print("can harvest 32")
-                            continue
-                        else:
+                        if not can_harvest():
+                            quick_print("start verify dead pumpkin 33")
                             plant(Entities.Pumpkin)
                             if get_water() < WATER_THRESHOLD:
                                 use_item(Items.Water)
                             use_item(Items.Fertilizer)
-                            # if can_harvest():
-                            #     quick_print("can harvest 33")
-                            #     continue
                             unverified.append((get_pos_x(), get_pos_y()))
                 elif entity == Entities.Dead_Pumpkin:
+                    quick_print("start verify dead pumpkin 34")
                     plant(Entities.Pumpkin)
                     if get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                     use_item(Items.Fertilizer)
-                    if can_harvest():
-                        quick_print("can harvest 34")
-                        continue
                     unverified.append((get_pos_x(), get_pos_y()))
             
             # 同步收获
@@ -229,6 +223,7 @@ def do_work_main():
         quick_print("unverified count: " + str(len(unverified)))
         # 阶段3：验证和补种
         while unverified:
+            quick_print("start verify")
             if shared["stop"]:
                 return
             target_x, target_y = unverified[0]
@@ -237,35 +232,26 @@ def do_work_main():
             
             entity = get_entity_type()
             if entity == Entities.Pumpkin:
-                if can_harvest():
-                    pass
-                else:
+                if not can_harvest():
                     if get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                     while get_entity_type() == Entities.Pumpkin and not can_harvest():
                         if shared["stop"]:
                             return
                         use_item(Items.Fertilizer)
-                    if can_harvest():
-                        quick_print("can harvest 32")
-                        continue
-                    else:
+                    if not can_harvest():
+                        quick_print("start verify dead pumpkin 33")
                         plant(Entities.Pumpkin)
                         if get_water() < WATER_THRESHOLD:
                             use_item(Items.Water)
                         use_item(Items.Fertilizer)
-                        # if can_harvest():
-                        #     quick_print("can harvest 33")
-                        #     continue
                         unverified.append((get_pos_x(), get_pos_y()))
             elif entity == Entities.Dead_Pumpkin:
+                quick_print("start verify dead pumpkin 34")
                 plant(Entities.Pumpkin)
                 if get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
                 use_item(Items.Fertilizer)
-                if can_harvest():
-                    quick_print("can harvest 34")
-                    continue
                 unverified.append((get_pos_x(), get_pos_y()))
         
         # 同步收获

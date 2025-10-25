@@ -152,15 +152,26 @@ def create_worker_right(region_x, region_y):
                             if shared["stop"]:
                                 return
                             use_item(Items.Fertilizer)
-                        if get_entity_type() == Entities.Dead_Pumpkin:
+                        if can_harvest():
+                            quick_print("can harvest 32")
+                            continue
+                        else:
                             plant(Entities.Pumpkin)
                             if get_water() < WATER_THRESHOLD:
                                 use_item(Items.Water)
+                            use_item(Items.Fertilizer)
+                            # if can_harvest():
+                            #     quick_print("can harvest 33")
+                            #     continue
                             unverified.append((get_pos_x(), get_pos_y()))
                 elif entity == Entities.Dead_Pumpkin:
                     plant(Entities.Pumpkin)
                     if get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
+                    use_item(Items.Fertilizer)
+                    if can_harvest():
+                        quick_print("can harvest 34")
+                        continue
                     unverified.append((get_pos_x(), get_pos_y()))
             
             # 同步收获
@@ -235,15 +246,26 @@ def do_work_main():
                         if shared["stop"]:
                             return
                         use_item(Items.Fertilizer)
-                    if get_entity_type() == Entities.Dead_Pumpkin:
+                    if can_harvest():
+                        quick_print("can harvest 32")
+                        continue
+                    else:
                         plant(Entities.Pumpkin)
                         if get_water() < WATER_THRESHOLD:
                             use_item(Items.Water)
+                        use_item(Items.Fertilizer)
+                        # if can_harvest():
+                        #     quick_print("can harvest 33")
+                        #     continue
                         unverified.append((get_pos_x(), get_pos_y()))
             elif entity == Entities.Dead_Pumpkin:
                 plant(Entities.Pumpkin)
                 if get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
+                use_item(Items.Fertilizer)
+                if can_harvest():
+                    quick_print("can harvest 34")
+                    continue
                 unverified.append((get_pos_x(), get_pos_y()))
         
         # 同步收获

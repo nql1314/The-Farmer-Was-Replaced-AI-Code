@@ -2,7 +2,7 @@
 # 优化策略：持续循环，从花瓣15开始依次收获成熟的向日葵，无需等待
 
 # 导入工具函数
-from farm_utils import optimize_path, goto_pos
+from farm_utils import optimize_path_circle, goto_pos
 
 SIZE = get_world_size()
 
@@ -98,7 +98,7 @@ def harvest_simple_mode(positions_dict):
 def harvest_optimized_mode(positions):
     current_x = get_pos_x()
     current_y = get_pos_y()
-    optimized_positions = optimize_path(positions, current_x, current_y)
+    optimized_positions = optimize_path_circle(positions, current_x, current_y)
     harvested_count = 0
     
     for px, py in optimized_positions:

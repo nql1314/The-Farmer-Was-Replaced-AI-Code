@@ -34,7 +34,7 @@
 # ============================================================
 
 # 导入通用工具库
-from farm_utils import goto_origin, goto_pos, generate_snake_path, optimize_path, check_and_water, check_mega_pumpkin_formed, harvest_mega_pumpkin
+from farm_utils import goto_origin, goto_pos, generate_snake_path, optimize_path_circle, check_and_water, check_mega_pumpkin_formed, harvest_mega_pumpkin
 
 # 配置参数
 CONFIG = {
@@ -271,7 +271,7 @@ def third_pass_verify_replanted(replanted_positions):
         # 优化检查顺序：按照最近邻排序
         current_x = get_pos_x()
         current_y = get_pos_y()
-        optimized_unconfirmed = optimize_path(unconfirmed, current_x, current_y)
+        optimized_unconfirmed = optimize_path_circle(unconfirmed, current_x, current_y)
         
         # 批量检查所有未确认的位置
         next_unconfirmed = []
@@ -308,7 +308,7 @@ def third_pass_verify_replanted(replanted_positions):
             quick_print("补种" + str(len(replant_list)) + "个枯萎南瓜")
             current_x = get_pos_x()
             current_y = get_pos_y()
-            optimized_replant = optimize_path(replant_list, current_x, current_y)
+            optimized_replant = optimize_path_circle(replant_list, current_x, current_y)
             
             for pos in optimized_replant:
                 x, y = pos

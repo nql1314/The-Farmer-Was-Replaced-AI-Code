@@ -43,18 +43,18 @@ def create_worker_left(region_x, region_y):
         while True:
             # 检查停止信号
             if shared["stop"]:
-                break
+                return
             
             # 等待右半边完成
             while region_data["ready"]:
                 if shared["stop"]:
-                    break
+                    return
                 pass
-            if shared["stop"]:
-                break
             
             # 阶段1：种植
             for direction in PATH:
+                if shared["stop"]:
+                    return
                 if get_ground_type() != Grounds.Soil:
                     till()
                 plant(Entities.Pumpkin)
@@ -62,6 +62,8 @@ def create_worker_left(region_x, region_y):
             # 阶段2：扫描未成熟南瓜
             unverified = []
             for direction in PATH:
+                if shared["stop"]:
+                    return
                 current_x = get_pos_x()
                 current_y = get_pos_y()
                 if not can_harvest():
@@ -74,7 +76,7 @@ def create_worker_left(region_x, region_y):
             # 阶段3：验证和补种
             while unverified:
                 if shared["stop"]:
-                    break
+                    return
                 target_x, target_y = unverified[0]
                 unverified.pop(0)
                 short_goto(target_x, target_y)
@@ -88,7 +90,7 @@ def create_worker_left(region_x, region_y):
                             use_item(Items.Water)
                         while get_entity_type() == Entities.Pumpkin and not can_harvest():
                             if shared["stop"]:
-                                break
+                                return
                             if num_items(Items.Fertilizer) > 0:
                                 use_item(Items.Fertilizer)
                         if get_entity_type() == Entities.Dead_Pumpkin:
@@ -102,18 +104,16 @@ def create_worker_left(region_x, region_y):
             if not shared["stop"]:
                 while not region_data["ready"]:
                     if shared["stop"]:
-                        break
-                if not shared["stop"]:
-                    for i in range(98):
-                        pass
-                    harvest()
-                    if num_items(Items.Pumpkin) >= 200000000:
-                        shared["stop"] = True
-                        break
-                    region_data["ready"] = False
+                        return
+                for i in range(98):
+                    pass
+                harvest()
+                if num_items(Items.Pumpkin) >= 200000000:
+                    shared["stop"] = True
+                    return
+                region_data["ready"] = False
     
     return worker
-
 
 def create_worker_right(region_x, region_y):
 
@@ -129,9 +129,16 @@ def create_worker_right(region_x, region_y):
         while True:
             # 检查停止信号
             if shared["stop"]:
-                break
+                return
+            # 等待左半边完成
+            while region_data["ready"]:
+             if shared["stop"]:
+                return
+             pass
             # 阶段1：种植
             for direction in PATH:
+                if shared["stop"]:
+                    return
                 if get_ground_type() != Grounds.Soil:
                     till()
                 plant(Entities.Pumpkin)
@@ -139,6 +146,8 @@ def create_worker_right(region_x, region_y):
             # 阶段2：扫描未成熟南瓜
             unverified = []
             for direction in PATH:
+                if shared["stop"]:
+                    return
                 current_x = get_pos_x()
                 current_y = get_pos_y()
                 if not can_harvest():
@@ -147,13 +156,13 @@ def create_worker_right(region_x, region_y):
                     if num_items(Items.Water) > 10 and get_water() < 0.8:
                         use_item(Items.Water)
                 move(PATH[(current_x - start_x, current_y - region_y)])
-            
+            failed_count = 0
             # 阶段3：验证和补种
             while unverified:
                 if shared["stop"]:
-                    break
+                    return
                 target_x, target_y = unverified[0]
-                unverified.pop(0)
+                unverified.remove((target_x, target_y))
                 short_goto(target_x, target_y)
                 
                 entity = get_entity_type()
@@ -165,7 +174,7 @@ def create_worker_right(region_x, region_y):
                             use_item(Items.Water)
                         while get_entity_type() == Entities.Pumpkin and not can_harvest():
                             if shared["stop"]:
-                                break
+                                return
                             if num_items(Items.Fertilizer) > 0:
                                 use_item(Items.Fertilizer)
                         if get_entity_type() == Entities.Dead_Pumpkin:
@@ -176,8 +185,9 @@ def create_worker_right(region_x, region_y):
                     unverified.append((get_pos_x(), get_pos_y()))
             
             # 同步收获
-            if not shared["stop"]:
-                region_data["ready"] = True
+            if shared["stop"]:
+                return
+            region_data["ready"] = True
     
     return worker
 
@@ -240,8 +250,7 @@ def do_work_main():
                     while get_entity_type() == Entities.Pumpkin and not can_harvest():
                         if shared["stop"]:
                             return
-                        if num_items(Items.Fertilizer) > 0:
-                            use_item(Items.Fertilizer)
+                        use_item(Items.Fertilizer)
                     if get_entity_type() == Entities.Dead_Pumpkin:
                         plant(Entities.Pumpkin)
                         unverified.append((get_pos_x(), get_pos_y()))

@@ -83,21 +83,21 @@ def generate_snake_path(size):
 # 路径优化函数
 # ====================
 
-def wrap_distance_1d(a, b, size):
+def wrap_distance_1d_circle(a, b, size):
     # 计算环形空间中两点的最短距离（单个维度）
     # 可以从两个方向到达：直接走或绕过边界
     direct = abs(b - a)
     wrap = size - direct
     return min(direct, wrap)
 
-def wrap_distance(x1, y1, x2, y2, world_size):
+def wrap_distance_circle(x1, y1, x2, y2, world_size):
     # 计算环形地图中两点的曼哈顿距离
     # 地图左右互通、上下互通
-    dx = wrap_distance_1d(x1, x2, world_size)
-    dy = wrap_distance_1d(y1, y2, world_size)
+    dx = wrap_distance_1d_circle(x1, x2, world_size)
+    dy = wrap_distance_1d_circle(y1, y2, world_size)
     return dx + dy
 
-def optimize_path(positions, start_x, start_y):
+def optimize_path_circle(positions, start_x, start_y):
     # 使用贪心最近邻算法优化路径（支持环形地图）
     # 从起始位置开始，每次选择最近的未访问位置
     # 自动获取地图大小并使用环形距离计算
@@ -124,7 +124,7 @@ def optimize_path(positions, start_x, start_y):
             x = remaining[i][0]
             y = remaining[i][1]
             # 使用环形距离计算
-            dist = wrap_distance(current_x, current_y, x, y, world_size)
+            dist = wrap_distance_circle(current_x, current_y, x, y, world_size)
             if dist < min_dist:
                 min_dist = dist
                 min_idx = i

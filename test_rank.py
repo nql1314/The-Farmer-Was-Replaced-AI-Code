@@ -1,13 +1,6 @@
-# 32x32南瓜挑战 - 16区域32无人机协作系统
-# 将32x32地图划分为16个6x6区域
-# 每个区域由2个无人机协作处理
+# 32x32南瓜挑战 - 16区域32无人机协作系统（精简版）
 
-from builtins import set
-from farm_utils import short_goto
-
-# ================================
-# 全局配置
-# ================================
+from farm_utils import short_goto, goto_pos
 
 # 16个6x6区域的左下角坐标
 REGIONS = [
@@ -17,362 +10,269 @@ REGIONS = [
     (26, 0), (26, 7), (26, 19), (26, 26)
 ]
 
-# 左半边种植路径（从(0,0)开始）
-directions1 = [East, East, North, North, North, North, North, West, West, South, East, South, West, South, East, South, West]
-# 左半边扫描路径（从(0,1)开始）
-directions2 = [South, East, East, North, North, North, North, North, West, West, South, East, South, West, South, East, South, West]
+# 路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
+# 左半边路径
+LEFT_PATH = {
+    (0, 0): East, (1, 0): East, (2, 0): North,
+    (2, 1): North, (2, 2): North, (2, 3): North, (2, 4): North, (2, 5): West,
+    (1, 5): West, (0, 5): South, (0, 4): East, (1, 4): South,
+    (1, 3): West, (0, 3): South, (0, 2): East, (1, 2): South,
+    (1, 1): West, (0, 1): South
+}
 
-# 右半边种植路径（从(5,0)开始）
-directions3 = [West, West, North, North, North, North, North, East, East, South, West, South, East, South, West, South, East]
-# 右半边扫描路径（从(5,1)开始）
-directions4 = [South, West, West, North, North, North, North, North, East, East, South, West, South, East, South, West, South, East]
+# 右半边路径
+RIGHT_PATH = {
+    (5, 0): West, (4, 0): West, (3, 0): North,
+    (3, 1): North, (3, 2): North, (3, 3): North, (3, 4): North, (3, 5): East,
+    (4, 5): East, (5, 5): South, (5, 4): West, (4, 4): South,
+    (4, 3): East, (5, 3): South, (5, 2): West, (4, 2): South,
+    (4, 1): East, (5, 1): South
+}
 
-# ================================
-# 工具函数
-# ================================
-
-def log_move(drone_id, x, y, direction, tick):
-    # 打印移动信息（简化版，减少输出）
-    pass
-
-def safe_move(drone_id, direction):
-    # 安全移动
-    move(direction)
-
-# ================================
-# 共享内存初始化
-# ================================
-
-def create_shared_memory():
-    # 创建共享数据结构
-    # 每个区域有独立的数据块，用区域坐标作为键
-    return {}
-
-# ================================
-# 通用的区域工作函数
-# ================================
-
-def create_region_worker(region_x, region_y, is_left_half):
-    # 创建区域工作函数的工厂函数
-    # region_x, region_y: 区域左下角坐标
-    # is_left_half: True表示处理左半边，False表示处理右半边
+# 计算最优路径（贪心最近邻算法）
+def find_optimal_path(current_x, current_y, positions):
+    if len(positions) == 0:
+        return []
     
+    # 使用贪心算法：每次选择最近的未访问位置
+    result = []
+    visited = []
+    cx = current_x
+    cy = current_y
+    remaining = []
+    for pos in positions:
+        remaining.append(pos)
+    
+    while remaining:
+        min_dist = 999999
+        nearest_idx = 0
+        
+        for i in range(len(remaining)):
+            tx, ty = remaining[i]
+            dist = abs(tx - cx) + abs(ty - cy)
+            if dist < min_dist:
+                min_dist = dist
+                nearest_idx = i
+        
+        target = remaining[nearest_idx]
+        remaining.pop(nearest_idx)
+        result.append(target)
+        cx, cy = target
+    
+    return result
+
+def create_shared():
+    return {"stop": False}
+
+def create_worker(region_x, region_y, is_left):
     def worker():
-        if is_left_half:
-            drone_id = "L" + str(region_x) + "," + str(region_y)
-        else:
-            drone_id = "R" + str(region_x) + "," + str(region_y)
-        
-        # 获取共享内存
         shared = wait_for(memory_source)
-        
-        # 创建该区域的独立数据块（使用区域坐标作为键）
         region_key = str(region_x) + "," + str(region_y)
-        if region_key not in shared:
-            shared[region_key] = {
-                "unverified_set": set(),
-                "unverified_list": [],
-                "id1": None,
-                "id2": None
-            }
         
-        # 获取该区域的数据
+        if region_key not in shared:
+            shared[region_key] = {"ready": False}
+        
         region_data = shared[region_key]
         
-        # 确定起始位置和路径
-        if is_left_half:
-            start_x = region_x
-            start_y = region_y
-            plant_dirs = directions1
-            scan_dirs = directions2
+        # 确定路径
+        if is_left:
+            path_map = LEFT_PATH
+            start_offset_x = 0
         else:
-            start_x = region_x + 5
-            start_y = region_y
-            plant_dirs = directions3
-            scan_dirs = directions4
-        
-        # 移动到起始位置
-        short_goto(start_x, start_y)
-        
-        quick_print("Drone", drone_id, "starting at", start_x, ",", start_y)
+            path_map = RIGHT_PATH
+            start_offset_x = 5
         
         while True:
-            # ================================
-            # 第一阶段：种植
-            # ================================
-            for direction in plant_dirs:
+            # 检查停止信号
+            if shared["stop"]:
+                break
+            
+            # 等待右半边完成
+            if is_left:
+                while region_data["ready"]:
+                    if shared["stop"]:
+                        break
+                    pass
+                if shared["stop"]:
+                    break
+            
+            # 阶段1：种植（不需要回到起始位置，从当前位置开始）
+            for i in range(18):
                 if get_ground_type() != Grounds.Soil:
                     till()
                 plant(Entities.Pumpkin)
-                safe_move(drone_id, direction)
-            
-            # 最后一个位置也要种植
-            if get_ground_type() != Grounds.Soil:
-                till()
-            plant(Entities.Pumpkin)
-            
-            # ================================
-            # 第二阶段：扫描并记录未成熟南瓜
-            # ================================
-            if is_left_half:
-                # 左半边初始化未验证集合
-                region_data["unverified_set"] = set()
-                region_data["unverified_list"] = []
-            
-            for direction in scan_dirs:
-                safe_move(drone_id, direction)
-                pos = (get_pos_x(), get_pos_y())
-                
-                # 检查是否成熟
+                move(path_map[(get_pos_x() - region_x, get_pos_y() - region_y)])
+            # 阶段2：扫描未成熟南瓜
+            unverified = []
+            for i in range(18):
                 if not can_harvest():
-                    # 未成熟，加入未验证集合
-                    if pos not in region_data["unverified_set"]:
-                        region_data["unverified_set"].add(pos)
-                        region_data["unverified_list"].append(pos)
+                    plant(Entities.Pumpkin)
+                    current_x = get_pos_x()
+                    current_y = get_pos_y()
+                    unverified.append((current_x, current_y))
+                    if num_items(Items.Water) > 10 and get_water() < 0.8:
+                        use_item(Items.Water)
+                move(path_map[(current_x - region_x, current_y - region_y)])
             
-            # ================================
-            # 第三阶段：验证和补种
-            # ================================
-            while len(region_data["unverified_list"]) > 0:
-                # 取出一个位置
-                target_x, target_y = region_data["unverified_list"][0]
-                region_data["unverified_list"].pop(0)
-                
-                # 导航到目标位置
+            unverified = find_optimal_path(get_pos_x(), get_pos_y(), unverified)
+
+            # 阶段3：验证和补种
+            while unverified:
+                if shared["stop"]:
+                    break
+                target_x, target_y = unverified[0]
+                unverified.pop(0)
                 short_goto(target_x, target_y)
                 
-                # 检查状态
                 entity = get_entity_type()
-                
                 if entity == Entities.Pumpkin:
                     if can_harvest():
-                        # 已成熟，从集合中移除
-                        pos = (get_pos_x(), get_pos_y())
-                        if pos in region_data["unverified_set"]:
-                            region_data["unverified_set"].remove(pos)
+                        pass
                     else:
-                        # 还未成熟
-                        if len(region_data["unverified_list"]) == 0:
-                            # 这是最后一个，浇水并等待
+                        if len(unverified) == 0:
                             if num_items(Items.Water) > 0 and get_water() < 0.8:
                                 use_item(Items.Water)
-                            
-                            # 等待成熟或枯萎
                             while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                                if shared["stop"]:
+                                    break
                                 pass
-                            
-                            # 重新检查状态
-                            final_entity = get_entity_type()
-                            if final_entity == Entities.Pumpkin and can_harvest():
-                                # 成熟了，移除
-                                pos = (get_pos_x(), get_pos_y())
-                                if pos in region_data["unverified_set"]:
-                                    region_data["unverified_set"].remove(pos)
-                            elif final_entity == Entities.Dead_Pumpkin:
-                                # 变成枯萎南瓜，补种
+                            if get_entity_type() == Entities.Dead_Pumpkin:
                                 plant(Entities.Pumpkin)
-                                pos = (get_pos_x(), get_pos_y())
-                                region_data["unverified_list"].append(pos)
+                                unverified.append((get_pos_x(), get_pos_y()))
                         else:
-                            # 不是最后一个，加回列表
-                            pos = (get_pos_x(), get_pos_y())
-                            region_data["unverified_list"].append(pos)
-                
+                            unverified.append((get_pos_x(), get_pos_y()))
                 elif entity == Entities.Dead_Pumpkin:
-                    # 枯萎了，补种
                     plant(Entities.Pumpkin)
-                    pos = (get_pos_x(), get_pos_y())
-                    region_data["unverified_list"].append(pos)
+                    unverified.append((get_pos_x(), get_pos_y()))
             
-            # ================================
-            # 第四阶段：等待收获信号
-            # ================================
-            short_goto(start_x, start_y)
-            
-            if is_left_half:
-                # 左半边：记录id1，直到id1 == id2
-                while True:
-                    current_id = measure()
-                    region_data["id1"] = current_id
-                    
-                    # 检查是否一致
-                    if region_data["id1"] == region_data["id2"] and region_data["id1"] != None:
+            # 同步收获
+            if not shared["stop"]:
+                if is_left:
+                    while region_data["ready"]:
+                        if shared["stop"]:
+                            break
+                        pass
+                    if not shared["stop"]:
+                        for i in range(98):
+                            pass
                         harvest()
-                        break
-            else:
-                # 右半边：记录id2，直到measure是None
-                while True:
-                    current_id = measure()
-                    region_data["id2"] = current_id
-                    
-                    # 如果measure是None，说明已经收获完成
-                    if current_id == None:
-                        break
-    
-    return worker
-
-# ================================
+                        if num_items(Items.Pumpkin) >= 200000000:
+                            shared["stop"] = True
+                            break
+                else:
+                    region_data["ready"] = False
 # 主程序
-# ================================
-
-quick_print("=== 32x32 Pumpkin Challenge - 32 Drones System ===")
 clear()
+memory_source = spawn_drone(create_shared)
 
-# 初始化共享内存（1个无人机）
-memory_source = spawn_drone(create_shared_memory)
-quick_print("Shared memory initialized")
-
-# 生成区域工作无人机
-drones = []
-drone_count = 0
-
-# 先为2-16号区域（索引1-15）生成无人机
-quick_print("Spawning drones for regions 2-16...")
+# 生成区域工作无人机（除了第一个区域的左半边）
 for region_idx in range(1, len(REGIONS)):
     region_x, region_y = REGIONS[region_idx]
-    
-    # 左半边无人机
-    left_worker = create_region_worker(region_x, region_y, True)
-    drone_left = spawn_drone(left_worker)
-    if drone_left:
-        drones.append(drone_left)
-        drone_count += 1
-        quick_print("Spawned left drone for region", region_idx + 1, "(", region_x, ",", region_y, ")")
-    
-    # 右半边无人机
-    right_worker = create_region_worker(region_x, region_y, False)
-    drone_right = spawn_drone(right_worker)
-    if drone_right:
-        drones.append(drone_right)
-        drone_count += 1
-        quick_print("Spawned right drone for region", region_idx + 1, "(", region_x, ",", region_y, ")")
+    spawn_drone(create_worker(region_x, region_y, True))
+    spawn_drone(create_worker(region_x, region_y, False))
 
-quick_print("Drones spawned for regions 2-16:", drone_count)
-
+# 第一个区域的右半边
 region_x, region_y = REGIONS[0]
-right_worker = create_region_worker(region_x, region_y, False)
-drone_right = spawn_drone(right_worker)
-if drone_right:
-    drones.append(drone_right)
-    drone_count += 1
-    quick_print("Spawned right drone for region 1 (", region_x, ",", region_y, ")")
-
-quick_print("Total drones spawned:", drone_count)
-quick_print("Max drones available:", num_unlocked(Unlocks.Megafarm))
-
-# 主无人机加入第一个区域的左半边工作
-quick_print("Main drone joining region 1 (left half)")
-
-# 获取共享内存
-shared = wait_for(memory_source)
+spawn_drone(create_worker(region_x, region_y, False))
 
 # 主无人机执行第一个区域的左半边工作
-start_x = region_x
-start_y = region_y
-drone_id = "MAIN"
-
-# 创建第一个区域的独立数据块
+shared = wait_for(memory_source)
 region_key = str(region_x) + "," + str(region_y)
-if region_key not in shared:
-    shared[region_key] = {
-        "unverified_set": set(),
-        "unverified_list": [],
-        "id1": None,
-        "id2": None
-    }
 
-# 获取第一个区域的数据
+if region_key not in shared:
+    shared[region_key] = {"ready": False, "round": 0}
+
 region_data = shared[region_key]
 
-short_goto(start_x, start_y)
-quick_print("Main drone at region 1 (0, 0)")
-
 while True:
-    # ================================
-    # 第一阶段：种植
-    # ================================
-    for direction in directions1:
+    # 检查南瓜数量并设置停止信号
+    if num_items(Items.Pumpkin) >= 200000000:
+        shared["stop"] = True
+        break
+    
+    # 等待右半边完成
+    while region_data["ready"]:
+        if num_items(Items.Pumpkin) >= 200000000:
+            shared["stop"] = True
+            break
+        pass
+    
+    if shared["stop"]:
+        break
+    
+    # 增加轮次
+    region_data["round"] += 1
+    current_round = region_data["round"]
+    
+    # 阶段1：种植（不需要回到起始位置，从当前位置开始）
+    
+    for i in range(18):
         if get_ground_type() != Grounds.Soil:
             till()
         plant(Entities.Pumpkin)
-        safe_move(drone_id, direction)
+        move(LEFT_PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
     
-    if get_ground_type() != Grounds.Soil:
-        till()
-    plant(Entities.Pumpkin)
+    if shared["stop"]:
+        break
     
-    # ================================
-    # 第二阶段：扫描
-    # ================================
-    region_data["unverified_set"] = set()
-    region_data["unverified_list"] = []
-    
-    for direction in directions2:
-        safe_move(drone_id, direction)
-        pos = (get_pos_x(), get_pos_y())
-        
+    # 阶段2：扫描未成熟南瓜
+    unverified = []
+    for i in range(18):
+        if shared["stop"]:
+            break
         if not can_harvest():
-            if pos not in region_data["unverified_set"]:
-                region_data["unverified_set"].add(pos)
-                region_data["unverified_list"].append(pos)
+            plant(Entities.Pumpkin)
+            current_x = get_pos_x()
+            current_y = get_pos_y()
+            unverified.append((current_x, current_y))
+            if num_items(Items.Water) > 10 and get_water() < 0.8:
+                use_item(Items.Water)
+        move(LEFT_PATH[(current_x - region_x, current_y - region_y)])
     
-    # ================================
-    # 第三阶段：验证和补种
-    # ================================
-    while len(region_data["unverified_list"]) > 0:
-        target_x, target_y = region_data["unverified_list"][0]
-        region_data["unverified_list"].pop(0)
-        
+    # 阶段3：验证和补种（使用最优路径）
+    unverified = find_optimal_path(get_pos_x(), get_pos_y(), unverified)
+    while unverified:
+        if shared["stop"]:
+            break
+        target_x, target_y = unverified[0]
+        unverified.pop(0)
         short_goto(target_x, target_y)
-        entity = get_entity_type()
         
+        entity = get_entity_type()
         if entity == Entities.Pumpkin:
             if can_harvest():
-                pos = (get_pos_x(), get_pos_y())
-                if pos in region_data["unverified_set"]:
-                    region_data["unverified_set"].remove(pos)
+                pass
             else:
-                if len(region_data["unverified_list"]) == 0:
+                if len(unverified) == 0:
                     if num_items(Items.Water) > 0 and get_water() < 0.8:
                         use_item(Items.Water)
-                    
-                    # 等待成熟或枯萎
                     while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                        if shared["stop"]:
+                            break
                         pass
-                    
-                    # 重新检查状态
-                    final_entity = get_entity_type()
-                    if final_entity == Entities.Pumpkin and can_harvest():
-                        # 成熟了，移除
-                        pos = (get_pos_x(), get_pos_y())
-                        if pos in region_data["unverified_set"]:
-                            region_data["unverified_set"].remove(pos)
-                    elif final_entity == Entities.Dead_Pumpkin:
-                        # 变成枯萎南瓜，补种
+                    if get_entity_type() == Entities.Dead_Pumpkin:
                         plant(Entities.Pumpkin)
-                        pos = (get_pos_x(), get_pos_y())
-                        region_data["unverified_list"].append(pos)
+                        unverified.append((get_pos_x(), get_pos_y()))
                 else:
-                    pos = (get_pos_x(), get_pos_y())
-                    region_data["unverified_list"].append(pos)
-        
+                    unverified.append((get_pos_x(), get_pos_y()))
         elif entity == Entities.Dead_Pumpkin:
             plant(Entities.Pumpkin)
-            pos = (get_pos_x(), get_pos_y())
-            region_data["unverified_list"].append(pos)
+            unverified.append((get_pos_x(), get_pos_y()))
+                    
+    if shared["stop"]:
+        break
     
-    # ================================
-    # 第四阶段：等待收获
-    # ================================
-    short_goto(start_x, start_y)
-    
-    while True:
-        current_id = measure()
-        region_data["id1"] = current_id
-        
-        if region_data["id1"] == region_data["id2"] and region_data["id1"] != None:
-            harvest()
-            quick_print("Main: Harvest complete, cycle", get_tick_count())
+    # 同步收获（移动到收获位置）
+    short_goto(region_x, region_y)
+    region_data["ready"] = True
+    while region_data["ready"]:
+        if shared["stop"]:
             break
-
-            
+        pass
+    if not shared["stop"]:
+        for i in range(98):
+            pass
+        harvest()
+        if num_items(Items.Pumpkin) >= 200000000:
+            shared["stop"] = True
+            break

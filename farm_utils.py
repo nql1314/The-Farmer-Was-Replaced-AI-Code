@@ -4,6 +4,24 @@
 # ====================
 # 移动和导航函数
 # ====================
+def short_goto(target_x, target_y):
+    current_x = get_pos_x()
+    current_y = get_pos_y()
+    dx = abs(target_x - current_x)
+    dy = abs(target_y - current_y)
+    if target_x > current_x:
+        for i in range(dx):
+            move(East)
+    else:
+        for i in range(dx):
+            move(West)
+    if target_y > current_y:
+        for i in range(dy):
+            move(North)
+    else:
+        for i in range(dy):
+            move(South)
+
 
 def goto_pos(target_x, target_y):
     # 移动到指定位置（支持环形地图最短路径）

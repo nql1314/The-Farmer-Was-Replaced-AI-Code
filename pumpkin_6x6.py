@@ -21,7 +21,8 @@ PATH = {
 
 WATER_THRESHOLD = 0.9
 WATER_COUNT = 10
-CIRCLE_COUNT = 5000
+CIRCLE_COUNT = 1000
+SLOW_THRESHOLD = 25000.0
 # 0.9 50 500 38338
 # 0.9 30 500 39144
 # 0.9 20 500 38425
@@ -88,6 +89,7 @@ def create_worker_right(region_x, region_y):
                         use_item(Items.Water)
                 move(PATH[(current_x - start_x, current_y - region_y)])
             # 阶段3：验证和补种
+            quick_print("unverified count: " + str(len(unverified)))
             while unverified:
                 if shared["stop"]:
                     return
@@ -132,6 +134,7 @@ def do_work_main():
 
     region_data = shared[region_key]
     circle = 0
+    slow_count = 0
 
     while True:
         start_time = get_time()
@@ -167,7 +170,7 @@ def do_work_main():
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
             move(PATH[(current_x - region_x, current_y - region_y)])
-
+        quick_print("unverified count: " + str(len(unverified)))
         # 阶段3：验证和补种
         while unverified:
             if shared["stop"]:
@@ -207,11 +210,13 @@ def do_work_main():
             harvest()
             increment = num_items(Items.Pumpkin) - items
             circle += 1
+            if increment/(get_time() - start_time) < SLOW_THRESHOLD:
+                slow_count += 1
             quick_print("circle: " + str(circle) + " time: " + str(get_time() - start_time) + " increment: " + str(increment/(get_time() - start_time)))
     
             region_data["ready"] = False
             if circle > CIRCLE_COUNT:
-                quick_print("all time: " + str(get_time() - beginTime) + " average speed: " + str(num_items(Items.Pumpkin)/(get_time() - beginTime)))
+                quick_print("all time: " + str(get_time() - beginTime) + " average speed: " + str(num_items(Items.Pumpkin)/(get_time() - beginTime)) + " slow count: " + str(slow_count))
                 shared["stop"] = True 
                 return
 

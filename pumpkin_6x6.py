@@ -23,6 +23,7 @@ WATER_THRESHOLD = 0.9
 WATER_COUNT = 10
 CIRCLE_COUNT = 1000
 SLOW_THRESHOLD = 25000.0
+HELP_THRESHOLD = 2
 # 0.9 50 500 38338
 # 0.9 30 500 39144
 # 0.9 20 500 38425
@@ -43,7 +44,41 @@ def create_shared():
     '7,0':{'ready':False},'7,7':{'ready':False},'7,19':{'ready':False},'7,26':{'ready':False},
     '19,0':{'ready':False},'19,7':{'ready':False},'19,19':{'ready':False},'19,26':{'ready':False},
     '26,0':{'ready':False},'26,7':{'ready':False},'26,19':{'ready':False},'26,26':{'ready':False},
-    '0,0':{'ready':False}}
+    '0,0':{'ready':False},'unverified_left':[],'unverified_right':[]}
+
+help_count = 0
+
+def help(unverified_name):
+    global help_count
+    shared = wait_for(memory_source)
+    unverified = shared[unverified_name]
+    while len(unverified) >= HELP_THRESHOLD:
+        target_x, target_y = unverified[1]
+        unverified.remove((target_x, target_y))
+        short_goto(target_x, target_y)
+        entity = get_entity_type()
+        if entity == Entities.Pumpkin:
+            if can_harvest():
+                pass
+            else:
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+                while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                    if shared["stop"]:
+                        return
+                if get_entity_type() == Entities.Dead_Pumpkin:
+                    plant(Entities.Pumpkin)
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
+                    unverified.append((target_x, target_y))
+        elif entity == Entities.Dead_Pumpkin:
+            plant(Entities.Pumpkin)
+            if get_water() < WATER_THRESHOLD:
+                use_item(Items.Water)
+            unverified.append((target_x, target_y))
+        help_count += 1
+        quick_print(unverified_name + " help count: " + str(help_count))
+    return
 
 
 
@@ -64,9 +99,13 @@ def create_worker_right(region_x, region_y):
                 return
             # 等待左半边完成
             while region_data["ready"]:
-             if shared["stop"]:
-                return
-             pass
+                if shared["stop"]:
+                    return
+                help("unverified_left")
+            x = get_pos_x()
+            y = get_pos_y()
+            if (x < start_x):
+                short_goto(start_x, y)
             # 阶段1：种植
             for direction in PATH:
                 if shared["stop"]:
@@ -76,7 +115,7 @@ def create_worker_right(region_x, region_y):
                 plant(Entities.Pumpkin)
                 move(PATH[(get_pos_x() - start_x, get_pos_y() - region_y)])
             # 阶段2：扫描未成熟南瓜
-            unverified = []
+            unverified = shared["unverified_right"]
             for direction in PATH:
                 if shared["stop"]:
                     return
@@ -137,16 +176,17 @@ def do_work_main():
     slow_count = 0
 
     while True:
-        start_time = get_time()
         # 检查南瓜数量并设置停止信号
         if shared["stop"]:
             return
-        
+        if (get_pos_x() >= region_x + 3):
+            short_goto(region_x + 2, get_pos_y())
         # 等待右半边完成
         while region_data["ready"]:
             if shared["stop"]:
                 return
             pass
+        start_time = get_time()
 
         # 阶段1：种植
         for direction in PATH:
@@ -158,7 +198,7 @@ def do_work_main():
             move(PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
         
         # 阶段2：扫描未成熟南瓜
-        unverified = []
+        unverified = shared["unverified_left"]
         for direction in PATH:
             if shared["stop"]:
                 return
@@ -205,6 +245,7 @@ def do_work_main():
         while not region_data["ready"]:
             if shared["stop"]:
                 return
+            help("unverified_right")
         if not shared["stop"]:
             items = num_items(Items.Pumpkin)
             harvest()

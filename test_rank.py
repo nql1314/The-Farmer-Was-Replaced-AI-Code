@@ -23,12 +23,55 @@ WATER_THRESHOLD = 0.9
 WATER_COUNT = 10
 
 def create_shared():
-    return {'stop':False,'0,7':{'ready':False},'0,19':{'ready':False},'0,26':{'ready':False},
-    '7,0':{'ready':False},'7,7':{'ready':False},'7,19':{'ready':False},'7,26':{'ready':False},
-    '19,0':{'ready':False},'19,7':{'ready':False},'19,19':{'ready':False},'19,26':{'ready':False},
-    '26,0':{'ready':False},'26,7':{'ready':False},'26,19':{'ready':False},'26,26':{'ready':False},
-    '0,0':{'ready':False}}
+    return {'stop':False,
+    '0,7':{'ready':False,'unverified_left':[],"unverified_right":[]},
+    '0,19':{'ready':False,'unverified_left':[],"unverified_right":[]},
+    '0,26':{'ready':False,'unverified_left':[],"unverified_right":[]},
+    '7,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '7,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '7,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '7,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '19,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '19,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '19,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '19,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '26,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '26,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '26,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '26,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
+    '0,0':{'ready':False,'unverified_left':[],"unverified_right":[]}}
 
+
+def help(region_data, unverified_name):
+    shared = wait_for(memory_source)
+    unverified = region_data[unverified_name]
+    if len(unverified) >= 2:
+        
+        target_x, target_y = unverified[1]
+        unverified.pop(1)
+        short_goto(target_x, target_y)
+        entity = get_entity_type()
+        if entity == Entities.Pumpkin:
+            if can_harvest():
+                pass
+            else:
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+                while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                    if shared["stop"]:
+                        return
+                if get_entity_type() == Entities.Dead_Pumpkin:
+                    plant(Entities.Pumpkin)
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
+                    unverified.append((target_x, target_y))
+        elif entity == Entities.Dead_Pumpkin:
+            plant(Entities.Pumpkin)
+            if get_water() < WATER_THRESHOLD:
+                use_item(Items.Water)
+            unverified.append((target_x, target_y))
+        quick_print(unverified_name + " help: " + str(len(unverified)))
+    return
 
 def create_worker_left(region_x, region_y):
 
@@ -47,13 +90,13 @@ def create_worker_left(region_x, region_y):
             # 检查停止信号
             if shared["stop"]:
                 return
-            
+            if (get_pos_x() >= region_x + 3):
+                short_goto(region_x + 2, get_pos_y())
             # 等待右半边完成
             while region_data["ready"]:
                 if shared["stop"]:
                     return
-                pass
-            
+
             # 阶段1：种植
             for direction in PATH:
                 if shared["stop"]:
@@ -63,7 +106,7 @@ def create_worker_left(region_x, region_y):
                 plant(Entities.Pumpkin)
                 move(PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
             # 阶段2：扫描未成熟南瓜
-            unverified = []
+            unverified = region_data["unverified_left"]
             for direction in PATH:
                 if shared["stop"]:
                     return
@@ -111,6 +154,8 @@ def create_worker_left(region_x, region_y):
                 while not region_data["ready"]:
                     if shared["stop"]:
                         return
+                    help(region_data, "unverified_left")
+                
                 harvest()
                 if num_items(Items.Pumpkin) >= 200000000:
                     shared["stop"] = True
@@ -136,9 +181,13 @@ def create_worker_right(region_x, region_y):
                 return
             # 等待左半边完成
             while region_data["ready"]:
-             if shared["stop"]:
-                return
-             pass
+                if shared["stop"]:
+                    return
+                help(region_data, "unverified_left")
+            x = get_pos_x()
+            y = get_pos_y()
+            if (x < start_x):
+                short_goto(start_x, y)
             # 阶段1：种植
             for direction in PATH:
                 if shared["stop"]:
@@ -148,7 +197,7 @@ def create_worker_right(region_x, region_y):
                 plant(Entities.Pumpkin)
                 move(PATH[(get_pos_x() - start_x, get_pos_y() - region_y)])
             # 阶段2：扫描未成熟南瓜
-            unverified = []
+            unverified = region_data["unverified_right"]
             for direction in PATH:
                 if shared["stop"]:
                     return
@@ -208,12 +257,12 @@ def do_work_main():
         # 检查南瓜数量并设置停止信号
         if shared["stop"]:
             return
-        
+        if (get_pos_x() >= region_x + 3):
+            short_goto(region_x + 2, get_pos_y())
         # 等待右半边完成
         while region_data["ready"]:
             if shared["stop"]:
                 return
-            pass
 
         # 阶段1：种植
         for direction in PATH:
@@ -225,7 +274,7 @@ def do_work_main():
             move(PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
         
         # 阶段2：扫描未成熟南瓜
-        unverified = []
+        unverified = region_data["unverified_left"]
         for direction in PATH:
             if shared["stop"]:
                 return
@@ -272,6 +321,7 @@ def do_work_main():
         while not region_data["ready"]:
             if shared["stop"]:
                 return
+            help(region_data, "unverified_right")
         if not shared["stop"]:
             harvest()
             region_data["ready"] = False

@@ -24,53 +24,60 @@ WATER_COUNT = 10
 
 def create_shared():
     return {'stop':False,
-    '0,7':{'ready':False,'unverified_left':[],"unverified_right":[]},
-    '0,19':{'ready':False,'unverified_left':[],"unverified_right":[]},
-    '0,26':{'ready':False,'unverified_left':[],"unverified_right":[]},
-    '7,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '7,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '7,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '7,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '19,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '19,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '19,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '19,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '26,0':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '26,7':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '26,19':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '26,26':{'ready':False,'unverified_right':[],"unverified_left":[]},
-    '0,0':{'ready':False,'unverified_left':[],"unverified_right":[]}}
+    '0,7':{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False},
+    '0,19':{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False},
+    '0,26':{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False},
+    '7,0':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '7,7':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '7,19':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '7,26':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '19,0':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '19,7':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '19,19':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '19,26':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '26,0':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '26,7':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '26,19':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '26,26':{'ready':False,'unverified_right':[],"unverified_left":[],"help_flag":False},
+    '0,0':{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False}}
 
+
+def loop_verify(shared):
+    while get_entity_type() == Entities.Pumpkin and not can_harvest():
+        if shared["stop"]:
+            return
+        if get_water() < WATER_THRESHOLD:
+            use_item(Items.Water)
+        use_item(Items.Fertilizer)
+    if get_entity_type() == Entities.Dead_Pumpkin:
+        plant(Entities.Pumpkin)
+        loop_verify(shared)
 
 def help(region_data, unverified_name):
     shared = wait_for(memory_source)
     unverified = region_data[unverified_name]
-    if len(unverified) >= 2:
-        
-        target_x, target_y = unverified[1]
-        unverified.pop(1)
+    if len(unverified) <= 1:
+        return
+    if region_data["help_flag"]:
+        return
+    region_data["help_flag"] = True
+    # 方案1：使用末尾元素（最安全，零竞争风险）
+    if len(unverified) >= 1:
+        # 先取出最后一个元素（原子操作）
+        target_x, target_y = unverified[-1]
+        unverified.pop()
         short_goto(target_x, target_y)
         entity = get_entity_type()
         if entity == Entities.Pumpkin:
             if can_harvest():
                 pass
             else:
-                if get_water() < WATER_THRESHOLD:
-                    use_item(Items.Water)
-                while get_entity_type() == Entities.Pumpkin and not can_harvest():
-                    if shared["stop"]:
-                        return
-                if get_entity_type() == Entities.Dead_Pumpkin:
-                    plant(Entities.Pumpkin)
-                    if get_water() < WATER_THRESHOLD:
-                        use_item(Items.Water)
-                    unverified.append((target_x, target_y))
+                loop_verify(shared)
         elif entity == Entities.Dead_Pumpkin:
             plant(Entities.Pumpkin)
-            if get_water() < WATER_THRESHOLD:
-                use_item(Items.Water)
-            unverified.append((target_x, target_y))
+            loop_verify(shared)
         quick_print(unverified_name + " help: " + str(len(unverified)))
+    region_data["help_flag"] = False
     return
 
 def create_worker_left(region_x, region_y):
@@ -155,7 +162,10 @@ def create_worker_left(region_x, region_y):
                     if shared["stop"]:
                         return
                     help(region_data, "unverified_left")
-                
+                while region_data["help_flag"]:
+                    if shared["stop"]:
+                        return
+                    pass
                 harvest()
                 if num_items(Items.Pumpkin) >= 200000000:
                     shared["stop"] = True
@@ -322,6 +332,10 @@ def do_work_main():
             if shared["stop"]:
                 return
             help(region_data, "unverified_right")
+        while region_data["help_flag"]:
+            if shared["stop"]:
+                return
+            pass
         if not shared["stop"]:
             harvest()
             region_data["ready"] = False

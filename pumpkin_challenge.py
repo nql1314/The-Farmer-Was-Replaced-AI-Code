@@ -280,7 +280,6 @@ def do_work_main():
                 return
 
 # 主程序
-clear()
 memory_source = spawn_drone(create_shared)
 
 # 生成区域工作无人机（除了第一个区域的左半边）

@@ -13,7 +13,7 @@ PATH = {
 
 WATER_THRESHOLD = 0.85
 WATER_COUNT = 10
-FINAL_ROUND_THRESHOLD = 197500000  # 达到时进入最后一轮模式
+FINAL_ROUND_THRESHOLD = 198400000  # 达到时进入最后一轮模式
 TARGET = 200000000
 
 def create_shared():
@@ -86,7 +86,6 @@ def final_round_helper(shared):
 
 
 def verify_left(region_x, region_y):
-    quick_print("verify_left", region_x, region_y, "start")
     goto(region_x, region_y)
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
@@ -94,17 +93,13 @@ def verify_left(region_x, region_y):
     left_active_drones = shared["left_active_drones"]
     for direction in PATH:
         if (region_x, region_y) not in left_active_drones:
-            quick_print("verify_left", region_x, region_y, "not in left_active_drones")
             return
         if not can_harvest():
             plant(Entities.Pumpkin)
             loop_verify(region_data)
         move(PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
-    quick_print("verify_left", region_x, region_y, "done")
-
 
 def verify_right(region_x, region_y):
-    quick_print("verify_right", region_x, region_y, "start")
     # 验证右半区域
     start_x = region_x + 3
     goto(start_x, region_y)
@@ -114,16 +109,11 @@ def verify_right(region_x, region_y):
     right_active_drones = shared["right_active_drones"]
     for direction in PATH:
         if (region_x, region_y) not in right_active_drones:
-            quick_print("verify_right", region_x, region_y, "not in right_active_drones")
             return
         if not can_harvest():
-            flag = plant(Entities.Pumpkin)
-            if flag == True:
-                quick_print("verify_right", get_pos_x(), get_pos_y(), "plant success")
+            plant(Entities.Pumpkin)
             loop_verify(region_data)
-        quick_print("verify_right", region_x, region_y, "move", get_pos_x(), get_pos_y())
         move(PATH[(get_pos_x() - start_x, get_pos_y() - region_y)])
-    quick_print("verify_right", region_x, region_y, "done")
 
 def create_worker_left(region_x, region_y, start_x_L, start_x_R):
     goto(start_x_L, region_y)
@@ -193,22 +183,17 @@ def create_worker_left(region_x, region_y, start_x_L, start_x_R):
             help(region_data, region_data["unverified_left"])
         while region_data["help_flag"]:
             pass
-        prePumpkinCount = num_items(Items.Pumpkin)
         harvest()
-        pumpkin_count = num_items(Items.Pumpkin)
-        quick_print("[worker_left]", region_x, region_y, "Increment: ", pumpkin_count - prePumpkinCount,get_time())
         region_data["ready"] = False
         
-        # 收获完成后，检查是否进入帮手模式
         pumpkin_count = num_items(Items.Pumpkin)
-        # if pumpkin_count >= TARGET:
-        #     quick_print("[worker_left]", region_x, region_y, "Target reached after harvest")
-        #     clear()
-        #     return
+        if pumpkin_count >= TARGET:
+            quick_print("[worker_left]", region_x, region_y, "Target reached after harvest")
+            clear()
+            return
         
         # 达到临近阈值时，转为帮手模式
         if pumpkin_count >= FINAL_ROUND_THRESHOLD:
-            quick_print("[worker_left]", region_x, region_y, "Entering helper mode at", pumpkin_count)
             shared["left_active_drones"].remove((region_x, region_y))
             shared["right_active_drones"].remove((region_x, region_y))
             final_round_helper(shared)
@@ -278,17 +263,13 @@ def create_worker_right(region_x, region_y, start_x):
         # 同步收获（先设置ready标志，让左边开始收获）
         region_data["ready"] = True
         pumpkin_count = num_items(Items.Pumpkin)
-        quick_print("[worker_right]", region_x, region_y, "pumpkin_count", pumpkin_count)
         # 达到临近阈值时，帮助另一个区域
         if pumpkin_count >= FINAL_ROUND_THRESHOLD - 100000:
-            quick_print("[worker_right]", region_x, region_y, "Entering helper mode at", pumpkin_count)
             final_round_helper(shared)
             return
 
 # 主程序
 memory_source = spawn_drone(create_shared)
-change_hat(Hats.Brown_Hat)
-quick_print("start create worker", get_tick_count())
 def worker1():
     create_worker_left(0, 7, 0, 3)
 spawn_drone(worker1)
@@ -334,9 +315,8 @@ spawn_drone(worker14)
 def worker15():
     create_worker_left(26, 26, 28, 31)
 spawn_drone(worker15)
-quick_print("end create worker", get_tick_count())
 create_worker_left(0, 0, 0, 3)
-while num_items(Items.Pumpkin) < TARGET:
-    pass
+while True:
+    if num_items(Items.Pumpkin) >= TARGET:
+        break
 clear()
-quick_print("end", num_items(Items.Pumpkin))

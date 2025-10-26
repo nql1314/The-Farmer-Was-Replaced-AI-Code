@@ -1,1 +1,1 @@
-leaderboard_run(Leaderboards.Pumpkins,"test_rank",0.2)
+leaderboard_run(Leaderboards.Pumpkins,"test_rank",1000)

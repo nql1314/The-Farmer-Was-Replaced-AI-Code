@@ -24,6 +24,7 @@ def short_goto(target_x, target_y):
 
 
 def goto(target_x, target_y):
+    
     # 移动到指定位置（支持环形地图最短路径）
     # 自动选择直接移动或跨越边界的最短路径
     world_size = get_world_size()

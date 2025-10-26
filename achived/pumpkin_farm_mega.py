@@ -3,7 +3,7 @@
 # 使用共享内存机制：通过 wait_for() 返回值实现跨无人机的共享集合
 
 # 从 farm_utils.py 导入公共工具函数
-from farm_utils import goto_pos, check_mega_pumpkin_formed, harvest_mega_pumpkin
+from farm_utils import goto, check_mega_pumpkin_formed, harvest_mega_pumpkin
 
 world_size = get_world_size()
 
@@ -155,7 +155,7 @@ def drone_plant_batch(batch):
         if num_items(Items.Carrot) < 1:
             return -1  # 标记胡萝卜不足
         
-        goto_pos(x, y)
+        goto(x, y)
         
         # 清理
         if can_harvest():
@@ -183,7 +183,7 @@ def drone_verify_and_fix_shared(batch, unverified_source):
     
     for pos in batch:
         x, y = pos
-        goto_pos(x, y)
+        goto(x, y)
         
         entity = get_entity_type()
         
@@ -240,7 +240,7 @@ def drone_diagonal_guard(corner_x, corner_y, diagonal_source):
     
     # 持续检查对角线位置
     while not diagonal_state["ready"]:
-        goto_pos(corner_x, corner_y)
+        goto(corner_x, corner_y)
         
         entity = get_entity_type()
         

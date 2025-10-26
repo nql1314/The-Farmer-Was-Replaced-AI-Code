@@ -2,7 +2,7 @@
 # 优化策略：持续循环，从花瓣15开始依次收获成熟的向日葵，无需等待
 
 # 导入工具函数
-from farm_utils import optimize_path_circle, goto_pos
+from farm_utils import optimize_path_circle, goto
 
 SIZE = get_world_size()
 
@@ -42,7 +42,7 @@ def scan_and_harvest_15_petals():
     harvested_15 = 0
     
     # 回到原点
-    goto_pos(0, 0)
+    goto(0, 0)
     
     # 简单遍历：从下到上，从左到右
     for y in range(SIZE):
@@ -77,7 +77,7 @@ def harvest_simple_mode(positions_dict):
     harvested_count = 0
     
     # 回到原点
-    goto_pos(0, 0)
+    goto(0, 0)
     
     # 简单遍历：从下到上，从左到右
     for y in range(SIZE):
@@ -102,7 +102,7 @@ def harvest_optimized_mode(positions):
     harvested_count = 0
     
     for px, py in optimized_positions:
-        goto_pos(px, py)
+        goto(px, py)
         
         if can_harvest():
             harvest()
@@ -226,7 +226,7 @@ cycle_count = 0
 
 while True:
     # 初始化：种植第一批向日葵
-    goto_pos(0, 0)
+    goto(0, 0)
     initialize_farm()
     quick_print("")
     quick_print("开始滚动收获循环...")

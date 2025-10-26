@@ -7,7 +7,7 @@
 # 4. 支持多种作物类型
 
 # 导入通用工具函数
-from farm_utils import goto_pos, goto_origin
+from farm_utils import goto, goto_origin
 
 # ====================
 # 配置参数
@@ -176,7 +176,7 @@ def initialize_farm(world_size, crop_entity):
     
     quick_print("初始化农场，种植 " + str(world_size * world_size) + " 个作物")
     
-    goto_pos(0, 0)
+    goto(0, 0)
     
     for y in range(world_size):
         for x in range(world_size):
@@ -211,7 +211,7 @@ def harvest_cycle(world_size, crop_entity):
     
     harvest_count = 0
     
-    goto_pos(0, 0)
+    goto(0, 0)
     
     for y in range(world_size):
         for x in range(world_size):

@@ -23,7 +23,7 @@ def short_goto(target_x, target_y):
             move(South)
 
 
-def goto_pos(target_x, target_y):
+def goto(target_x, target_y):
     # 移动到指定位置（支持环形地图最短路径）
     # 自动选择直接移动或跨越边界的最短路径
     world_size = get_world_size()
@@ -58,7 +58,7 @@ def goto_pos(target_x, target_y):
 
 def goto_origin():
     # 回到原点(0,0)（使用环形地图最短路径）
-    goto_pos(0, 0)
+    goto(0, 0)
 
 # ====================
 # 路径生成函数
@@ -191,7 +191,7 @@ def refill_carrots_generic(target_count, world_size, snake_path):
             
             if i < len(snake_path) - 1:
                 next_x, next_y = snake_path[i + 1]
-                goto_pos(next_x, next_y)
+                goto(next_x, next_y)
         
         do_a_flip()
     
@@ -207,7 +207,7 @@ def check_mega_pumpkin_formed(pumpkin_size):
     # 返回：是否已形成
     
     # 检查对角线两端：(0,0) 和 (size-1, size-1)
-    goto_pos(0, 0)
+    goto(0, 0)
     entity1 = get_entity_type()
     if entity1 != Entities.Pumpkin:
         return False
@@ -216,7 +216,7 @@ def check_mega_pumpkin_formed(pumpkin_size):
     if id1 == None:
         return False
     
-    goto_pos(pumpkin_size - 1, pumpkin_size - 1)
+    goto(pumpkin_size - 1, pumpkin_size - 1)
     entity2 = get_entity_type()
     if entity2 != Entities.Pumpkin:
         return False
@@ -237,7 +237,7 @@ def harvest_mega_pumpkin(pumpkin_size):
     before_count = num_items(Items.Pumpkin)
     
     # 移动到(0,0)收获
-    goto_pos(0, 0)
+    goto(0, 0)
     
     if can_harvest():
         # 获取ID用于显示
@@ -297,7 +297,7 @@ def print_cactus_grid(world_size):
     for y in range(world_size - 1, -1, -1):
         row = []
         for x in range(world_size):
-            goto_pos(x, y)
+            goto(x, y)
             if get_entity_type() == Entities.Cactus:
                 val = measure()
                 row.append(str(val))
@@ -323,7 +323,7 @@ def verify_cactus_sorted(world_size):
     
     for y in range(world_size):
         for x in range(world_size):
-            goto_pos(x, y)
+            goto(x, y)
             
             if get_entity_type() != Entities.Cactus:
                 continue

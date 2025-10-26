@@ -6,7 +6,7 @@
 # 3. 并行排序多行/列以提高效率
 # 4. 单点触发连锁收割
 
-from farm_utils import goto_pos, check_and_swap_direction, print_cactus_grid
+from farm_utils import goto, check_and_swap_direction, print_cactus_grid
 
 world_size = get_world_size()
 
@@ -16,7 +16,7 @@ def drone_plant_region(x_start, x_end, y_start, y_end):
     
     for y in range(y_start, y_end):
         for x in range(x_start, x_end):
-            goto_pos(x, y)
+            goto(x, y)
             
             if get_ground_type() != Grounds.Soil:
                 till()
@@ -96,7 +96,7 @@ def drone_sort_row(y):
         
         # 从左向右遍历这一行
         for x in range(world_size - 1):
-            goto_pos(x, y)
+            goto(x, y)
             
             if get_entity_type() != Entities.Cactus:
                 continue
@@ -123,7 +123,7 @@ def drone_sort_column(x):
         
         # 从下向上遍历这一列
         for y in range(world_size - 1):
-            goto_pos(x, y)
+            goto(x, y)
             
             if get_entity_type() != Entities.Cactus:
                 continue
@@ -304,7 +304,7 @@ def bubble_sort_mega():
 
 # 收割仙人掌
 def harvest_all():
-    goto_pos(0, 0)
+    goto(0, 0)
     
     count_before = num_items(Items.Cactus)
     
@@ -329,7 +329,7 @@ def harvest_all():
         quick_print("收割剩余仙人掌...")
         for y in range(world_size):
             for x in range(world_size):
-                goto_pos(x, y)
+                goto(x, y)
                 if can_harvest():
                     harvest()
     

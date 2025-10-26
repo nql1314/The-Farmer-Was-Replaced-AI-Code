@@ -34,7 +34,7 @@
 # ============================================================
 
 # 导入通用工具库
-from farm_utils import goto_origin, goto_pos, generate_snake_path, optimize_path_circle, check_and_water, check_mega_pumpkin_formed, harvest_mega_pumpkin
+from farm_utils import goto_origin, goto, generate_snake_path, optimize_path_circle, check_and_water, check_mega_pumpkin_formed, harvest_mega_pumpkin
 
 # 配置参数
 CONFIG = {
@@ -51,7 +51,7 @@ FULL_PATH = generate_snake_path(CONFIG['world_size'])
 
 # 本地别名（为了与原代码兼容）
 def goto(target_x, target_y):
-    goto_pos(target_x, target_y)
+    goto(target_x, target_y)
 
 # 补充胡萝卜到目标数量
 def refill_carrots():

@@ -3,7 +3,7 @@
 # 优化：第一遍种植，第二遍补种枯萎，第三遍验证补种，最多3次遍历
 
 # 导入通用工具库
-from farm_utils import goto_origin, goto_pos, generate_snake_path
+from farm_utils import goto_origin, goto, generate_snake_path
 
 # 配置参数
 CONFIG = {
@@ -21,7 +21,7 @@ FULL_FARM_PATH = generate_snake_path(world_size)
 
 # 本地别名（为了与原代码兼容）
 def goto(target_x, target_y):
-    goto_pos(target_x, target_y)
+    goto(target_x, target_y)
 
 # 补种胡萝卜到目标数量
 def refill_carrots():

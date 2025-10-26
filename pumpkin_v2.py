@@ -1,6 +1,6 @@
 # 32x32南瓜挑战 - 16区域32无人机协作系统（精简版）
 
-from farm_utils import short_goto, goto_pos
+from farm_utils import short_goto, goto
 
 # 16个6x6区域的左下角坐标
 REGIONS = [
@@ -73,7 +73,7 @@ def help(region_data, unverified_name):
 def create_worker_left(region_x, region_y):
 
     def worker():
-        goto_pos(region_x, region_y)
+        goto(region_x, region_y)
         spawn_drone(create_worker_right(region_x, region_y))
         shared = wait_for(memory_source)
         region_data = shared[(region_x, region_y)]
@@ -153,7 +153,7 @@ def create_worker_right(region_x, region_y):
         region_data = shared[(region_x, region_y)]
 
         start_x = region_x + 3
-        goto_pos(start_x, region_y)
+        goto(start_x, region_y)
         while True:
             # 等待左半边完成
             while region_data["ready"]:

@@ -36,7 +36,7 @@
 # - 保证满足二维排序条件
 
 # 导入通用工具库
-from farm_utils import goto_origin, goto_pos, check_and_swap_direction, print_cactus_grid, verify_cactus_sorted, clear_field, get_world_size_debug
+from farm_utils import goto_origin, goto, check_and_swap_direction, print_cactus_grid, verify_cactus_sorted, clear_field, get_world_size_debug
 
 # ====================
 # 配置区域
@@ -71,7 +71,7 @@ def sort_rows():
             
             # 从左向右遍历这一行
             for x in range(size - 1):
-                goto_pos(x, y)
+                goto(x, y)
                 
                 if get_entity_type() != Entities.Cactus:
                     continue
@@ -117,7 +117,7 @@ def sort_columns():
             
             # 从下向上遍历这一列
             for y in range(size - 1):
-                goto_pos(x, y)
+                goto(x, y)
                 
                 if get_entity_type() != Entities.Cactus:
                     continue
@@ -249,7 +249,7 @@ def harvest_all():
         quick_print("收割剩余仙人掌...")
         for y in range(size):
             for x in range(size):
-                goto_pos(x, y)
+                goto(x, y)
                 if can_harvest():
                     harvest()
     

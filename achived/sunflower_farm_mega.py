@@ -1,7 +1,7 @@
 # The Farmer Was Replaced - 多无人机向日葵能量农场（优化版）
 # 策略：单无人机维护共享内存，按花瓣数分类收获，最大化5倍奖励
 
-from farm_utils import goto_pos
+from farm_utils import goto
 
 SIZE = get_world_size()
 
@@ -100,7 +100,7 @@ def drone_plant_batch(batch):
     # 无人机：种植一批位置
     for pos in batch:
         x, y = pos
-        goto_pos(x, y)
+        goto(x, y)
         
         # 收割旧作物
         if can_harvest():
@@ -123,7 +123,7 @@ def drone_scan_and_harvest_15(batch, tracker_source):
     
     for pos in batch:
         x, y = pos
-        goto_pos(x, y)
+        goto(x, y)
         
         if get_entity_type() == Entities.Sunflower and can_harvest():
             petals = measure()
@@ -146,7 +146,7 @@ def drone_harvest_batch(positions):
     
     for pos in positions:
         x, y = pos
-        goto_pos(x, y)
+        goto(x, y)
         
         if get_entity_type() == Entities.Sunflower and can_harvest():
             harvest()

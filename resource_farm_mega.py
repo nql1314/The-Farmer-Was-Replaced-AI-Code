@@ -3,7 +3,7 @@
 # 优化：无人机持续运行，无需重复创建，最大化并行效率
 # 特性：伴生作物自动施肥，加速生长并获得奇异物质
 
-from farm_utils import goto_pos, generate_snake_path
+from farm_utils import goto, generate_snake_path
 
 SIZE = get_world_size()
 
@@ -112,7 +112,7 @@ def drone_worker(region_id, x_start, x_end, y_start, y_end):
         local_fertilized = 0  # 施肥次数
         
         # 移动到区域起点
-        goto_pos(x_start, y_start)
+        goto(x_start, y_start)
         
         # 蛇形遍历区域
         for row in range(height):

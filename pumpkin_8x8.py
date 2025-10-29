@@ -12,6 +12,7 @@ PATH_6X6 = { #521.84
     (1, 1): East, (0, 1): North
 }
 
+
 # 8x8路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 PATH_8X8 = {
     (0, 0): East, (1, 0): East, (2, 0): East, (3, 0): North,
@@ -24,7 +25,7 @@ PATH_8X8 = {
 WATER_THRESHOLD = 0.85
 WATER_COUNT = 10
 FINAL_ROUND_THRESHOLD = 198200000  # 达到时进入最后一轮模式
-TARGET = 200000000
+TARGET = 20000000
 
 def create_shared():
     return {
@@ -488,60 +489,10 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
             return
 
 # 主程序
+clear()
 memory_source = spawn_drone(create_shared)
 
 # 6x6区域工人（8个边缘区域）
 
-def worker2():
-    create_worker_left_6x6(26, 0,28, 31,0)
-spawn_drone(worker2)
-def worker3():
-    create_worker_left_6x6(26, 26,28, 31,31)
-spawn_drone(worker3)
-def worker4():
-    create_worker_left_6x6(0, 26, 0, 3,31)
-spawn_drone(worker4)
-def worker5():
-    create_worker_left_6x6(9, 9, 9, 12,9)
-spawn_drone(worker5)
-def worker6():
-    create_worker_left_6x6(17, 9, 19, 22,9)
-spawn_drone(worker6)
-def worker7():
-    create_worker_left_6x6(9, 17, 11, 14,22)
-spawn_drone(worker7)
-def worker1():
-    create_worker_left_6x6(17, 17, 19, 22,22)
-spawn_drone(worker1)
-
-# 8x8区域工人（8个区域）
-def worker8():
-    create_worker_left_8x8(8, 0, 8, 12,0)
-spawn_drone(worker8)
-def worker9():
-    create_worker_left_8x8(17, 0, 20, 24,0)
-spawn_drone(worker9)
-def worker10():
-    create_worker_left_8x8(0, 7, 0, 4,7)
-spawn_drone(worker10)
-def worker11():
-    create_worker_left_8x8(24, 8, 28, 31,8)
-spawn_drone(worker11)
-
-def worker12():
-    create_worker_left_8x8(0, 16, 0, 4,23)
-spawn_drone(worker12)
-def worker13():
-    create_worker_left_8x8(24, 17, 27, 31,24)
-spawn_drone(worker13)
-def worker14():
-    create_worker_left_8x8(7, 24, 10, 14,31)
-spawn_drone(worker14)
-def worker15():
-    create_worker_left_8x8(16, 24, 19, 23,31)
-spawn_drone(worker15)
-
-create_worker_left_6x6(0, 0, 0, 3,0)
-while True:
-    if num_items(Items.Pumpkin) >= TARGET:
-        break
+create_worker_left_8x8(0, 0, 0,4,0)
+quick_print(get_time())

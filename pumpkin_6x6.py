@@ -1,217 +1,225 @@
-# 32x32南瓜挑战 - 16区域32无人机协作系统（精简版）
+# 32x32南瓜挑战 - 中间4个8x8区域 + 12个6x6区域
 
 from farm_utils import short_goto, goto
 
-# 16个6x6区域的左下角坐标
-REGIONS = [
-    (0, 0), (0, 7), (0, 19), (0, 26),
-    (7, 0), (7, 7), (7, 19), (7, 26),
-    (19, 0), (19, 7), (19, 19), (19, 26),
-    (26, 0), (26, 7), (26, 19), (26, 26)
-]
+# 6x6路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 
-# 路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
-PATH = {
-    (0, 0): East, (1, 0): East, (2, 0): North,
-    (2, 1): North, (2, 2): North, (2, 3): North, (2, 4): North, (2, 5): West,
-    (1, 5): West, (0, 5): South, (0, 4): East, (1, 4): South,
-    (1, 3): West, (0, 3): South, (0, 2): East, (1, 2): South,
-    (1, 1): West, (0, 1): South
+PATH_6X6 = { #521.84
+    (0, 0): North, (1, 0): West, (2, 0): West,
+    (2, 1): South, (2, 2): West, (2, 3): South, (2, 4): West, (2, 5): South,
+    (1, 5): East, (0, 5): East, (0, 4): North, (1, 4): South,
+    (1, 3): East, (0, 3): North, (0, 2): North, (1, 2): South,
+    (1, 1): East, (0, 1): North
 }
 
-WATER_THRESHOLD = 0.9
-WATER_COUNT = 10
-CIRCLE_COUNT = 1000
-SLOW_THRESHOLD = 100000.0
-HELP_THRESHOLD = 2
-# 0.9 50 500 38338
-# 0.9 30 500 39144
-# 0.9 20 500 38425
-# 0.9 15 500 38964
-# 0.9 5 500 39037
-# 0.9 0 500 39116
-# 0.98 10 5000 38830
-# 0.95 10 5000 39065
-# 0.9 10 5000 39164
-# 0.85 10 5000 38819
-# 0.8 10 5000 38484
-# 0.75 10 500 38400
-# 0.5 10 500 34700
+# PATH_6X6 = { #530
+#     (0, 0): East, (1, 0): East, (2, 0): North,
+#     (2, 1): North, (2, 2): North, (2, 3): North, (2, 4): North, (2, 5): West,
+#     (1, 5): West, (0, 5): South, (0, 4): East, (1, 4): South,
+#     (1, 3): West, (0, 3): South, (0, 2): East, (1, 2): South,
+#     (1, 1): West, (0, 1): South
+# }
 
+
+# 8x8路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
+PATH_8X8 = {
+    (0, 0): East, (1, 0): East, (2, 0): East, (3, 0): North,
+    (3, 1): North, (3, 2): North, (3, 3): North, (3, 4): North, (3, 5): North, (3, 6): North, (3, 7): West,
+    (2, 7): West, (1, 7): West, (0, 7): South,  (0, 6): East,(1,6):East,(2,6):South,
+    (2, 5): West, (1, 5): West, (0, 5): South, (0, 4): East,(1,4):East,(2,4):South, (2, 3): West, (1, 3): West,
+    (0,3): South, (0, 2): East, (1, 2): East, (2, 2): South, (2,1): West, (1,1): West, (0, 1): South, (0, 0): East
+}
+
+WATER_THRESHOLD = 0.85
+WATER_COUNT = 10
+FINAL_ROUND_THRESHOLD = 198200000  # 达到时进入最后一轮模式
+TARGET = 20000000
 
 def create_shared():
-    return {'stop':False,'0,7':{'ready':False},'0,19':{'ready':False},'0,26':{'ready':False},
-    '7,0':{'ready':False},'7,7':{'ready':False},'7,19':{'ready':False},'7,26':{'ready':False},
-    '19,0':{'ready':False},'19,7':{'ready':False},'19,19':{'ready':False},'19,26':{'ready':False},
-    '26,0':{'ready':False},'26,7':{'ready':False},'26,19':{'ready':False},'26,26':{'ready':False},
-    '0,0':{'ready':False,'unverified_left':[],'unverified_right':[],'help_flag':False}}
+    return {
+        # 6x6区域状态（8个)
+        (0, 0):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (26, 0):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (26, 26):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (0, 26):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (9, 9):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (17, 9):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (9, 17):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+        (17, 17):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'6x6'},
+                # 8x8区域状态（8个）
+        (8, 0):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (17, 0):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (24, 0):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (0, 7):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (0, 16):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (24, 8):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (0, 23):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (24, 17):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (7, 24):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        (16, 24):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False,'type':'8x8'},
+        "left_active_drones_6x6":  [(0,0),(26,0),(26,26),(0,26),(9,9),(17,9),(9,17),(17,17)],
+        "right_active_drones_6x6":  [(0,0),(26,0),(26,26),(0,26),(9,9),(17,9),(9,17),(17,17)],
+        "left_active_drones_8x8":  [(8,0),(17,0),(24,8),(0,7),(0,16),(24,17),(7,24),(16,24)],
+        "right_active_drones_8x8":  [(8,0),(17,0),(24,8),(0,7),(0,16),(24,17),(24,17),(7,24),(16,24)]
+    }
 
-
-def loop_verify(shared):
+def loop_verify(region_data):
     while get_entity_type() == Entities.Pumpkin and not can_harvest():
-        if shared["stop"]:
-            return
-        if get_water() < WATER_THRESHOLD:
-            use_item(Items.Water)
         use_item(Items.Fertilizer)
     if get_entity_type() == Entities.Dead_Pumpkin:
         plant(Entities.Pumpkin)
-        loop_verify(shared)
+        loop_verify(region_data)
 
-def help(region_data, unverified_name):
-    shared = wait_for(memory_source)
-    unverified = region_data[unverified_name]
-    if len(unverified) <= 1:
+def help(region_data, unverified):
+    unverified_len = len(unverified)
+    if unverified_len <= 1:
         return
-    if region_data["help_flag"]:
-        return
-    region_data["help_flag"] = True
-    # 方案1：使用末尾元素（最安全，零竞争风险）
-    if len(unverified) >= 1:
-        # 先取出最后一个元素（原子操作）
+    if unverified_len >= 1:
         target_x, target_y = unverified[-1]
         unverified.pop()
+        region_data["help_flag"] = True
         short_goto(target_x, target_y)
         entity = get_entity_type()
         if entity == Entities.Pumpkin:
-            if can_harvest():
-                pass
-            else:
-                loop_verify(shared)
+            if not can_harvest():
+                loop_verify(region_data)
         elif entity == Entities.Dead_Pumpkin:
             plant(Entities.Pumpkin)
-            loop_verify(shared)
-        quick_print(unverified_name + " help: " + str(len(unverified)))
-    region_data["help_flag"] = False
-    return
+            loop_verify(region_data)
+        region_data["help_flag"] = False
+
+def get_next_region_6x6(shared):
+    left_active_drones = shared["left_active_drones_6x6"]
+    if len(left_active_drones) == 0:
+       return
+    if len(left_active_drones) > 1:
+        region_pos = left_active_drones[random() * len(left_active_drones)//1]
+        return region_pos
+    return None
+
+def get_next_region_8x8(shared):
+    left_active_drones = shared["left_active_drones_8x8"]
+    if len(left_active_drones) == 0:
+       return
+    if len(left_active_drones) > 1:
+        region_pos = left_active_drones[random() * len(left_active_drones)//1]
+        return region_pos
+    return None
 
 
-
-def create_worker_right(region_x, region_y):
-    def worker():
-        shared = wait_for(memory_source)
-        region_key = str(region_x) + "," + str(region_y)
-        
-
-        region_data = shared[region_key]
-
-        start_x = region_x + 3
-        goto(start_x, region_y)
-
-        while True:
-            # 检查停止信号
-            if shared["stop"]:
-                return
-            # 等待左半边完成
-            while region_data["ready"]:
-                if shared["stop"]:
-                    return
-                help(region_data, "unverified_left")
-            x = get_pos_x()
-            y = get_pos_y()
-            if (x < start_x):
-                short_goto(start_x, y)
-            # 阶段1：种植
-            for direction in PATH:
-                if shared["stop"]:
-                    return
-                if get_ground_type() != Grounds.Soil:
-                    till()
-                plant(Entities.Pumpkin)
-                move(PATH[(get_pos_x() - start_x, get_pos_y() - region_y)])
-            # 阶段2：扫描未成熟南瓜
-            unverified = region_data["unverified_right"]
-            for direction in PATH:
-                if shared["stop"]:
-                    return
-                current_x = get_pos_x()
-                current_y = get_pos_y()
-                if not can_harvest():
-                    plant(Entities.Pumpkin)
-                    unverified.append((current_x, current_y))
-                    if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
-                        use_item(Items.Water)
-                move(PATH[(current_x - start_x, current_y - region_y)])
-            # 阶段3：验证和补种
-            quick_print("unverified count: " + str(len(unverified)))
-            while unverified:
-                quick_print("start verify")
-                if shared["stop"]:
-                    return
-                target_x, target_y = unverified[0]
-                unverified.remove((target_x, target_y))
-                short_goto(target_x, target_y)
-                
-                entity = get_entity_type()
-                if entity == Entities.Pumpkin:
-                    if can_harvest():
-                        pass
-                    else:
-                        if get_water() < WATER_THRESHOLD:
-                            use_item(Items.Water)
-                        while get_entity_type() == Entities.Pumpkin and not can_harvest():
-                            if shared["stop"]:
-                                return
-                            use_item(Items.Fertilizer)
-                        if not can_harvest():
-                            quick_print("start verify dead pumpkin 33")
-                            plant(Entities.Pumpkin)
-                            if get_water() < WATER_THRESHOLD:
-                                use_item(Items.Water)
-                            use_item(Items.Fertilizer)
-                            unverified.append((get_pos_x(), get_pos_y()))
-                elif entity == Entities.Dead_Pumpkin:
-                    quick_print("start verify dead pumpkin 34")
-                    plant(Entities.Pumpkin)
-                    if get_water() < WATER_THRESHOLD:
-                        use_item(Items.Water)
-                    use_item(Items.Fertilizer)
-                    unverified.append((get_pos_x(), get_pos_y()))
-            
-            # 同步收获
-            if shared["stop"]:
-                return
-            region_data["ready"] = True
-    
-    return worker
-
-def do_work_main():
-    beginTime = get_time()
-# 主无人机执行第一个区域的左半边工作
-    shared = wait_for(memory_source)
-    region_key = "0,0"
-
-    region_data = shared[region_key]
-    circle = 0
-    slow_count = 0
-
+def final_round_helper_6x6(shared):
+    left_active_drones = shared["left_active_drones_6x6"]
+    right_active_drones = shared["right_active_drones_6x6"]
     while True:
-        # 检查南瓜数量并设置停止信号
-        if shared["stop"]:
+        region_pos= get_next_region_6x6(shared)
+        if region_pos == None:
             return
-        if (get_pos_x() >= region_x + 3):
-            short_goto(region_x + 2, get_pos_y())
+        verify_right_6x6(region_pos[0], region_pos[1])
+        verify_left_6x6(region_pos[0], region_pos[1])
+
+def final_round_helper_8x8(shared):
+    left_active_drones = shared["left_active_drones_8x8"]
+    right_active_drones = shared["right_active_drones_8x8"]
+    while True:
+        region_pos= get_next_region_8x8(shared)
+        if region_pos == None:
+            return
+        verify_right_8x8(region_pos[0], region_pos[1])
+        verify_left_8x8(region_pos[0], region_pos[1])
+
+
+# 6x6区域验证函数
+def verify_left_6x6(region_x, region_y):
+    goto(region_x, region_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    # 验证左半区域
+    left_active_drones = shared["left_active_drones_6x6"]
+    for direction in PATH_6X6:
+        if (region_x, region_y) not in left_active_drones:
+            return
+        if not can_harvest():
+            plant(Entities.Pumpkin)
+            loop_verify(region_data)
+        move(PATH_6X6[(get_pos_x() - region_x, get_pos_y() - region_y)])
+
+def verify_right_6x6(region_x, region_y):
+    # 验证右半区域
+    start_x = region_x + 3
+    goto(start_x, region_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    # 验证右半区域
+    right_active_drones = shared["right_active_drones_6x6"]
+    for direction in PATH_6X6:
+        if (region_x, region_y) not in right_active_drones:
+            return
+        if not can_harvest():
+            plant(Entities.Pumpkin)
+            loop_verify(region_data)
+        move(PATH_6X6[(get_pos_x() - start_x, get_pos_y() - region_y)])
+
+# 8x8区域验证函数
+def verify_left_8x8(region_x, region_y):
+    goto(region_x, region_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    # 验证左半区域
+    left_active_drones = shared["left_active_drones_8x8"]
+    for direction in PATH_8X8:
+        if (region_x, region_y) not in left_active_drones:
+            return
+        if not can_harvest():
+            plant(Entities.Pumpkin)
+            loop_verify(region_data)
+        move(PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)])
+
+def verify_right_8x8(region_x, region_y):
+    # 验证右半区域
+    start_x = region_x + 4
+    goto(start_x, region_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    # 验证右半区域
+    right_active_drones = shared["right_active_drones_8x8"]
+    for direction in PATH_8X8:
+        if (region_x, region_y) not in right_active_drones:
+            return
+        if not can_harvest():
+            plant(Entities.Pumpkin)
+            loop_verify(region_data)
+        move(PATH_8X8[(get_pos_x() - start_x, get_pos_y() - region_y)])
+
+# 6x6区域的worker_left函数
+def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
+    def worker():
+        create_worker_right_6x6(region_x, region_y, start_x_R,start_y)
+    spawn_drone(worker)
+    goto(start_x_L, start_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    region_x_R = region_x + 3
+    region_x_L_R = region_x + 2
+    
+    while True:
+        current_pos_x = get_pos_x()
+        if current_pos_x >= region_x_R:
+            short_goto(region_x_L_R, get_pos_y())
+        
         # 等待右半边完成
         while region_data["ready"]:
-            if shared["stop"]:
-                return
             pass
-        start_time = get_time()
-
+        
         # 阶段1：种植
-        for direction in PATH:
-            if shared["stop"]:
-                return
+        for direction in PATH_6X6:
             if get_ground_type() != Grounds.Soil:
                 till()
             plant(Entities.Pumpkin)
-            move(PATH[(get_pos_x() - region_x, get_pos_y() - region_y)])
+            move(PATH_6X6[(get_pos_x() - region_x, get_pos_y() - region_y)])
         
         # 阶段2：扫描未成熟南瓜
         unverified = region_data["unverified_left"]
-        for direction in PATH:
-            if shared["stop"]:
-                return
+        for direction in PATH_6X6:
             current_x = get_pos_x()
             current_y = get_pos_y()
             if not can_harvest():
@@ -219,35 +227,27 @@ def do_work_main():
                 unverified.append((current_x, current_y))
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
-            move(PATH[(current_x - region_x, current_y - region_y)])
-        quick_print("unverified count: " + str(len(unverified)))
+            move(PATH_6X6[(current_x - region_x, current_y - region_y)])
+        
         # 阶段3：验证和补种
         while unverified:
-            quick_print("start verify")
-            if shared["stop"]:
-                return
             target_x, target_y = unverified[0]
             unverified.pop(0)
             short_goto(target_x, target_y)
-            
             entity = get_entity_type()
             if entity == Entities.Pumpkin:
                 if not can_harvest():
                     if get_water() < WATER_THRESHOLD:
                         use_item(Items.Water)
                     while get_entity_type() == Entities.Pumpkin and not can_harvest():
-                        if shared["stop"]:
-                            return
                         use_item(Items.Fertilizer)
                     if not can_harvest():
-                        quick_print("start verify dead pumpkin 33")
                         plant(Entities.Pumpkin)
                         if get_water() < WATER_THRESHOLD:
                             use_item(Items.Water)
                         use_item(Items.Fertilizer)
                         unverified.append((get_pos_x(), get_pos_y()))
             elif entity == Entities.Dead_Pumpkin:
-                quick_print("start verify dead pumpkin 34")
                 plant(Entities.Pumpkin)
                 if get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
@@ -256,32 +256,251 @@ def do_work_main():
         
         # 同步收获
         while not region_data["ready"]:
-            if shared["stop"]:
-                return
-            help(region_data, "unverified_right")
+            help(region_data, region_data["unverified_left"])
         while region_data["help_flag"]:
-            if shared["stop"]:
-                return
             pass
-        if not shared["stop"]:
-            items = num_items(Items.Pumpkin)
-            harvest()
-            increment = num_items(Items.Pumpkin) - items
-            circle += 1
-            if increment < SLOW_THRESHOLD:
-                slow_count += 1
-            quick_print("circle: " + str(circle) + " time: " + str(get_time() - start_time) + " increment: "+ str(increment) + "speed:" + str(increment/(get_time() - start_time)))
+        harvest()
+        region_data["ready"] = False
+        
+        pumpkin_count = num_items(Items.Pumpkin)
+        if pumpkin_count >= TARGET:
+            quick_print("[worker_left_6x6]", region_x, region_y, "Target reached")
+            clear()
+            return
+        
+        # 达到临近阈值时，转为帮手模式
+        if pumpkin_count >= FINAL_ROUND_THRESHOLD:
+            shared["left_active_drones_6x6"].remove((region_x, region_y))
+            shared["right_active_drones_6x6"].remove((region_x, region_y))
+            final_round_helper_6x6(shared)
+            return
+
+# 8x8区域的worker_left函数
+def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
+    def worker():
+        create_worker_right_8x8(region_x, region_y, start_x_R,start_y)
+    spawn_drone(worker)
+    goto(start_x_L, start_y)
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    region_x_R = region_x + 4
+    region_x_L_R = region_x + 3
     
-            region_data["ready"] = False
-            if circle > CIRCLE_COUNT:
-                quick_print("all time: " + str(get_time() - beginTime) + " average speed: " + str(num_items(Items.Pumpkin)/(get_time() - beginTime)) + " slow count: " + str(slow_count))
-                shared["stop"] = True 
-                return
+    while True:
+        current_pos_x = get_pos_x()
+        if current_pos_x >= region_x_R:
+            short_goto(region_x_L_R, get_pos_y())
+        
+        # 等待右半边完成
+        while region_data["ready"]:
+            pass
+        
+        # 阶段1：种植
+        for direction in PATH_8X8:
+            if get_ground_type() != Grounds.Soil:
+                till()
+            plant(Entities.Pumpkin)
+            move(PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)])
+        
+        # 阶段2：扫描未成熟南瓜
+        unverified = region_data["unverified_left"]
+        for direction in PATH_8X8:
+            current_x = get_pos_x()
+            current_y = get_pos_y()
+            if not can_harvest():
+                plant(Entities.Pumpkin)
+                unverified.append((current_x, current_y))
+                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+            move(PATH_8X8[(current_x - region_x, current_y - region_y)])
+        
+        # 阶段3：验证和补种
+        while unverified:
+            target_x, target_y = unverified[0]
+            unverified.pop(0)
+            short_goto(target_x, target_y)
+            entity = get_entity_type()
+            if entity == Entities.Pumpkin:
+                if not can_harvest():
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
+                    while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                        use_item(Items.Fertilizer)
+                    if not can_harvest():
+                        plant(Entities.Pumpkin)
+                        if get_water() < WATER_THRESHOLD:
+                            use_item(Items.Water)
+                        use_item(Items.Fertilizer)
+                        unverified.append((get_pos_x(), get_pos_y()))
+            elif entity == Entities.Dead_Pumpkin:
+                plant(Entities.Pumpkin)
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+                use_item(Items.Fertilizer)
+                unverified.append((get_pos_x(), get_pos_y()))
+        
+        # 同步收获
+        while not region_data["ready"]:
+            help(region_data, region_data["unverified_left"])
+        while region_data["help_flag"]:
+            pass
+        harvest()
+        region_data["ready"] = False
+        
+        pumpkin_count = num_items(Items.Pumpkin)
+        if pumpkin_count >= TARGET:
+            quick_print("[worker_left_8x8]", region_x, region_y, "Target reached")
+            clear()
+            return
+        
+        # 达到临近阈值时，转为帮手模式
+        if pumpkin_count >= FINAL_ROUND_THRESHOLD:
+            shared["left_active_drones_8x8"].remove((region_x, region_y))
+            shared["right_active_drones_8x8"].remove((region_x, region_y))
+            final_round_helper_8x8(shared)
+            return
+
+# 6x6区域的worker_right函数
+def create_worker_right_6x6(region_x, region_y, start_x,start_y):
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    region_x_R = region_x + 3
+    goto(start_x, start_y)
+    
+    while True:
+        # 等待左半边完成
+        while region_data["ready"]:
+            help(region_data, region_data["unverified_left"])
+        x = get_pos_x()
+        y = get_pos_y()
+        if x < region_x_R:
+            short_goto(region_x_R, y)
+                
+        pumpkin_count = num_items(Items.Pumpkin)
+        # 阶段1：种植
+        for direction in PATH_6X6:
+            if get_ground_type() != Grounds.Soil:
+                till()
+            plant(Entities.Pumpkin)
+            move(PATH_6X6[(get_pos_x() - region_x_R, get_pos_y() - region_y)])
+        
+        # 阶段2：扫描未成熟南瓜
+        unverified = region_data["unverified_right"]
+        for direction in PATH_6X6:
+            current_x = get_pos_x()
+            current_y = get_pos_y()
+            if not can_harvest():
+                plant(Entities.Pumpkin)
+                unverified.append((current_x, current_y))
+                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+            move(PATH_6X6[(current_x - region_x_R, current_y - region_y)])
+        
+        # 阶段3：验证和补种
+        while unverified:
+            target_x, target_y = unverified[0]
+            unverified.remove((target_x, target_y))
+            short_goto(target_x, target_y)
+            entity = get_entity_type()
+            if entity == Entities.Pumpkin:
+                if not can_harvest():
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
+                    while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                        use_item(Items.Fertilizer)
+                    if not can_harvest():
+                        plant(Entities.Pumpkin)
+                        if get_water() < WATER_THRESHOLD:
+                            use_item(Items.Water)
+                        use_item(Items.Fertilizer)
+                        unverified.append((get_pos_x(), get_pos_y()))
+            elif entity == Entities.Dead_Pumpkin:
+                plant(Entities.Pumpkin)
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+                use_item(Items.Fertilizer)
+                unverified.append((get_pos_x(), get_pos_y()))
+        
+        # 同步收获
+        region_data["ready"] = True
+        pumpkin_count = num_items(Items.Pumpkin)
+        if pumpkin_count >= FINAL_ROUND_THRESHOLD - 100000:
+            final_round_helper_6x6(shared)
+            return
+
+# 8x8区域的worker_right函数
+def create_worker_right_8x8(region_x, region_y, start_x,start_y):
+    shared = wait_for(memory_source)
+    region_data = shared[(region_x, region_y)]
+    region_x_R = region_x + 4
+    goto(start_x, start_y)
+    
+    while True:
+        # 等待左半边完成
+        while region_data["ready"]:
+            help(region_data, region_data["unverified_left"])
+        x = get_pos_x()
+        y = get_pos_y()
+        if x < region_x_R:
+            short_goto(region_x_R, y)
+                
+        pumpkin_count = num_items(Items.Pumpkin)
+        # 阶段1：种植
+        for direction in PATH_8X8:
+            if get_ground_type() != Grounds.Soil:
+                till()
+            plant(Entities.Pumpkin)
+            move(PATH_8X8[(get_pos_x() - region_x_R, get_pos_y() - region_y)])
+        
+        # 阶段2：扫描未成熟南瓜
+        unverified = region_data["unverified_right"]
+        for direction in PATH_8X8:
+            current_x = get_pos_x()
+            current_y = get_pos_y()
+            if not can_harvest():
+                plant(Entities.Pumpkin)
+                unverified.append((current_x, current_y))
+                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+            move(PATH_8X8[(current_x - region_x_R, current_y - region_y)])
+        
+        # 阶段3：验证和补种
+        while unverified:
+            target_x, target_y = unverified[0]
+            unverified.remove((target_x, target_y))
+            short_goto(target_x, target_y)
+            entity = get_entity_type()
+            if entity == Entities.Pumpkin:
+                if not can_harvest():
+                    if get_water() < WATER_THRESHOLD:
+                        use_item(Items.Water)
+                    while get_entity_type() == Entities.Pumpkin and not can_harvest():
+                        use_item(Items.Fertilizer)
+                    if not can_harvest():
+                        plant(Entities.Pumpkin)
+                        if get_water() < WATER_THRESHOLD:
+                            use_item(Items.Water)
+                        use_item(Items.Fertilizer)
+                        unverified.append((get_pos_x(), get_pos_y()))
+            elif entity == Entities.Dead_Pumpkin:
+                plant(Entities.Pumpkin)
+                if get_water() < WATER_THRESHOLD:
+                    use_item(Items.Water)
+                use_item(Items.Fertilizer)
+                unverified.append((get_pos_x(), get_pos_y()))
+        
+        # 同步收获
+        region_data["ready"] = True
+        pumpkin_count = num_items(Items.Pumpkin)
+        if pumpkin_count >= FINAL_ROUND_THRESHOLD - 100000:
+            final_round_helper_8x8(shared)
+            return
 
 # 主程序
+clear()
 memory_source = spawn_drone(create_shared)
 
-# 第一个区域的右半边
-region_x, region_y = REGIONS[0]
-spawn_drone(create_worker_right(region_x, region_y))
-do_work_main()
+# 6x6区域工人（8个边缘区域）
+
+create_worker_left_6x6(0, 0, 0, 3,0)
+quick_print(get_time())

@@ -219,6 +219,7 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
             move(PATH_6X6[(current_x - region_x, current_y - region_y)])
+            move(PATH_6X6[(current_x - region_x, current_y - region_y)])
         
         # 阶段3：验证和补种
         while unverified:

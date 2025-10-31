@@ -7,6 +7,10 @@
 def short_goto(target_x, target_y):
     current_x = get_pos_x()
     current_y = get_pos_y()
+    short_goto_xy(current_x, current_y, target_x, target_y)
+
+
+def short_goto_xy(current_x, current_y, target_x, target_y):
     dx = abs(target_x - current_x)
     dy = abs(target_y - current_y)
     if target_x > current_x:
@@ -21,15 +25,30 @@ def short_goto(target_x, target_y):
     else:
         for i in range(dy):
             move(South)
+            
+def short_goto_x(current_x, target_x):
+    dx = abs(target_x - current_x)
+    if target_x > current_x:
+        for i in range(dx):
+            move(East)
+    else:
+        for i in range(dx):
+            move(West)
 
+def short_goto_y(current_y, target_y):
+    dy = abs(target_y - current_y)
+    if target_y > current_y:
+        for i in range(dy):
+            move(North)
+    else:
+        for i in range(dy):
+            move(South)
 
-def goto(target_x, target_y):
+def goto_xy(current_x, current_y, target_x, target_y):
     
     # 移动到指定位置（支持环形地图最短路径）
     # 自动选择直接移动或跨越边界的最短路径
     world_size = get_world_size()
-    current_x = get_pos_x()
-    current_y = get_pos_y()
     
     # X轴移动：计算两个方向的距离，选择最短的
     dx_east = (target_x - current_x) % world_size  # 向东的距离（可能跨界）
@@ -56,6 +75,9 @@ def goto(target_x, target_y):
         # 向南更近
         for i in range(dy_south):
             move(South)
+
+def goto(target_x, target_y):
+    goto_xy(get_pos_x(), get_pos_y(), target_x, target_y)
 
 def goto_origin():
     # 回到原点(0,0)（使用环形地图最短路径）

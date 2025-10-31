@@ -1,1 +1,1 @@
-leaderboard_run(Leaderboards.Pumpkins,"pumpkin_v9",1000)
+leaderboard_run(Leaderboards.Pumpkins,"pumpkin_v10",1000)

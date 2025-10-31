@@ -4,36 +4,61 @@ from farm_utils import short_goto, goto
 
 # 6x6路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 
-PATH_6X6 = { #521.84
-    (0, 0): North, 
-    (0, 1): North,
-    (0, 2): North,
-    (0, 3): North,
-    (0, 4): North,
-    (0, 5): East,
-    (1, 5): East,
-    (2, 5): South,
-    (2, 4): West,
-    (1, 4): South,
-    (1, 3): East,
-    (2, 3): South,
-    (2, 2): West,
-    (1, 2): South,
-    (1, 1): East,
-    (2, 1): South,
-    (2, 0): West,
-    (1, 0): West
+PATH_6X6 = {
+    (0, 0): [North, North, North, North, North, East, East, South, West, South, East, South, West, South, East, South, West, West],
+    (0, 1): [North, North, North, North, East, East, South, West, South, East, South, West, South, East, South, West, West, North],
+    (0, 2): [North, North, North, East, East, South, West, South, East, South, West, South, East, South, West, West, North, North],
+    (0, 3): [North, North, East, East, South, West, South, East, South, West, South, East, South, West, West, North, North, North],
+    (0, 4): [North, East, East, South, West, South, East, South, West, South, East, South, West, West, North, North, North, North],
+    (0, 5): [East, East, South, West, South, East, South, West, South, East, South, West, West, North, North, North, North, North],
+    (1, 5): [East, South, West, South, East, South, West, South, East, South, West, West, North, North, North, North, North, East],
+    (2, 5): [South, West, South, East, South, West, South, East, South, West, West, North, North, North, North, North, East, East],
+    (2, 4): [West, South, East, South, West, South, East, South, West, West, North, North, North, North, North, East, East, South],
+    (1, 4): [South, East, South, West, South, East, South, West, West, North, North, North, North, North, East, East, South, West],
+    (1, 3): [East, South, West, South, East, South, West, West, North, North, North, North, North, East, East, South, West, South],
+    (2, 3): [South, West, South, East, South, West, West, North, North, North, North, North, East, East, South, West, South, East],
+    (2, 2): [West, South, East, South, West, West, North, North, North, North, North, East, East, South, West, South, East, South],
+    (1, 2): [South, East, South, West, West, North, North, North, North, North, East, East, South, West, South, East, South, West],
+    (1, 1): [East, South, West, West, North, North, North, North, North, East, East, South, West, South, East, South, West, South],
+    (2, 1): [South, West, West, North, North, North, North, North, East, East, South, West, South, East, South, West, South, East],
+    (2, 0): [West, West, North, North, North, North, North, East, East, South, West, South, East, South, West, South, East, South],
+    (1, 0): [West, North, North, North, North, North, East, East, South, West, South, East, South, West, South, East, South, West]
 }
-
-PATH_6x6_ORDER = [North, North, North, North, East, East, South, West, South, East, East, North, East, South, West, South, North, North, North, North, East, East, South, West, South, East, East, North, East, South, West, South]
 
 # 8x8路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 PATH_8X8 = {
-    (0, 0): East, (1, 0): East, (2, 0): East, (3, 0): North,
-    (3, 1): North, (3, 2): North, (3, 3): North, (3, 4): North, (3, 5): North, (3, 6): North, (3, 7): West,
-    (2, 7): West, (1, 7): West, (0, 7): South,  (0, 6): East,(1,6):East,(2,6):South,
-    (2, 5): West, (1, 5): West, (0, 5): South, (0, 4): East,(1,4):East,(2,4):South, (2, 3): West, (1, 3): West,
-    (0,3): South, (0, 2): East, (1, 2): East, (2, 2): South, (2,1): West, (1,1): West, (0, 1): South, (0, 0): East
+    (0, 0): [East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South],
+    (1, 0): [East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East],
+    (2, 0): [East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East],
+    (3, 0): [North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East],
+    (3, 1): [North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North],
+    (3, 2): [North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North],
+    (3, 3): [North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North],
+    (3, 4): [North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North],
+    (3, 5): [North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North],
+    (3, 6): [North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North],
+    (3, 7): [West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North],
+    (2, 7): [West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West],
+    (1, 7): [West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West],
+    (0, 7): [South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West],
+    (0, 6): [East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South],
+    (1, 6): [East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East],
+    (2, 6): [South, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East],
+    (2, 5): [West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South],
+    (1, 5): [West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West],
+    (0, 5): [South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West],
+    (0, 4): [East, East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South],
+    (1, 4): [East, South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East],
+    (2, 4): [South, West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East],
+    (2, 3): [West, West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South],
+    (1, 3): [West, South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West],
+    (0, 3): [South, East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West],
+    (0, 2): [East, East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South],
+    (1, 2): [East, South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East],
+    (2, 2): [South, West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East],
+    (2, 1): [West, West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South],
+    (1, 1): [West, South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West],
+    (0, 1): [South, East, East, East, North, North, North, North, North, North, North, West, West, West, South, East, East, South, West, West, South, East, East, South, West, West, South, East, East, South, West, West]
 }
 
 WATER_THRESHOLD = 0.75
@@ -126,23 +151,22 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
             pass
         
         # 阶段1：种植
-        for direction in PATH_6X6:
+        path = PATH_6X6[(get_pos_x() - region_x, get_pos_y() - region_y)]
+        for direction in path:
             if get_ground_type() != Grounds.Soil:
                 till()
             plant(Entities.Pumpkin)
-            move(PATH_6X6[(get_pos_x() - region_x, get_pos_y() - region_y)])
+            move(direction)
         
         # 阶段2：扫描未成熟南瓜
         unverified = region_data["unverified_left"]
-        for direction in PATH_6X6:
-            current_x = get_pos_x()
-            current_y = get_pos_y()
+        for direction in path:
             if not can_harvest():
                 plant(Entities.Pumpkin)
-                unverified.append((current_x, current_y))
+                unverified.append((get_pos_x(), get_pos_y()))
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
-            move(PATH_6X6[(current_x - region_x, current_y - region_y)])
+            move(direction)
         
         # 阶段3：验证和补种
         plant_and_verify(region_data, "unverified_left", region_x, region_y)
@@ -182,23 +206,22 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
             pass
         
         # 阶段1：种植
-        for direction in PATH_8X8:
+        path = PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)]
+        for direction in path:
             if get_ground_type() != Grounds.Soil:
                 till()
             plant(Entities.Pumpkin)
-            move(PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)])
+            move(direction)
         
         # 阶段2：扫描未成熟南瓜
         unverified = region_data["unverified_left"]
-        for direction in PATH_8X8:
-            current_x = get_pos_x()
-            current_y = get_pos_y()
+        for direction in path:
             if not can_harvest():
                 plant(Entities.Pumpkin)
-                unverified.append((current_x, current_y))
+                unverified.append((get_pos_x(), get_pos_y()))
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
-            move(PATH_8X8[(current_x - region_x, current_y - region_y)])
+            move(direction)
         
         # 阶段3：验证和补种
         plant_and_verify(region_data, "unverified_left", region_x, region_y)
@@ -234,23 +257,22 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
                 
         pumpkin_count = num_items(Items.Pumpkin)
         # 阶段1：种植
-        for direction in PATH_6X6:
+        path = PATH_6X6[(get_pos_x() - region_x_R, get_pos_y() - region_y)]
+        for direction in path:
             if get_ground_type() != Grounds.Soil:
                 till()
             plant(Entities.Pumpkin)
-            move(PATH_6X6[(get_pos_x() - region_x_R, get_pos_y() - region_y)])
+            move(direction)
         
         # 阶段2：扫描未成熟南瓜
         unverified = region_data["unverified_right"]
-        for direction in PATH_6X6:
-            current_x = get_pos_x()
-            current_y = get_pos_y()
+        for direction in path:
             if not can_harvest():
                 plant(Entities.Pumpkin)
-                unverified.append((current_x, current_y))
+                unverified.append((get_pos_x(), get_pos_y()))
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
-            move(PATH_6X6[(current_x - region_x_R, current_y - region_y)])
+            move(direction)
         
         # 阶段3：验证和补种
         plant_and_verify(region_data, "unverified_right", region_x, region_y)
@@ -276,23 +298,22 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
                 
         pumpkin_count = num_items(Items.Pumpkin)
         # 阶段1：种植
-        for direction in PATH_8X8:
+        path = PATH_8X8[(get_pos_x() - region_x_R, get_pos_y() - region_y)]
+        for direction in path:
             if get_ground_type() != Grounds.Soil:
                 till()
             plant(Entities.Pumpkin)
-            move(PATH_8X8[(get_pos_x() - region_x_R, get_pos_y() - region_y)])
+            move(direction)
         
         # 阶段2：扫描未成熟南瓜
         unverified = region_data["unverified_right"]
-        for direction in PATH_8X8:
-            current_x = get_pos_x()
-            current_y = get_pos_y()
+        for direction in path:
             if not can_harvest():
                 plant(Entities.Pumpkin)
-                unverified.append((current_x, current_y))
+                unverified.append((get_pos_x(), get_pos_y()))
                 if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
                     use_item(Items.Water)
-            move(PATH_8X8[(current_x - region_x_R, current_y - region_y)])
+            move(direction)
         
         # 阶段3：验证和补种
         plant_and_verify(region_data, "unverified_right", region_x, region_y)

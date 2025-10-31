@@ -90,7 +90,6 @@ def create_shared():
     }
 
 def plant_and_verify(region_data,unverified_key,start_x,start_y):
-    quick_print("[plant_and_verify]", start_x,start_y,get_time())
     while True:
         copy_unverified = []
         for target_x, target_y in region_data[unverified_key]:
@@ -148,6 +147,7 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
         
         # 等待右半边完成
         while region_data["ready"]:
+            quick_print("[worker_left_6x6]", region_x, region_y, "Waiting for right half to finish")
             pass
         
         # 阶段1：种植
@@ -203,6 +203,7 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
         
         # 等待右半边完成
         while region_data["ready"]:
+            quick_print("[worker_left_8x8]", region_x, region_y, "Waiting for right half to finish")
             pass
         
         # 阶段1：种植
@@ -255,7 +256,6 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
         if x < region_x_R:
             short_goto(region_x_R, y)
                 
-        pumpkin_count = num_items(Items.Pumpkin)
         # 阶段1：种植
         path = PATH_6X6[(get_pos_x() - region_x_R, get_pos_y() - region_y)]
         for direction in path:
@@ -296,7 +296,6 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
         if x < region_x_R:
             short_goto(region_x_R, y)
                 
-        pumpkin_count = num_items(Items.Pumpkin)
         # 阶段1：种植
         path = PATH_8X8[(get_pos_x() - region_x_R, get_pos_y() - region_y)]
         for direction in path:

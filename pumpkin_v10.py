@@ -1,6 +1,6 @@
 # 32x32南瓜挑战 - 中间4个8x8区域 + 12个6x6区域
 
-from farm_utils import short_goto_xy, goto_xy,short_goto_x
+from farm_utils import short_goto, goto,short_goto_x
 
 # 6x6路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 
@@ -90,11 +90,10 @@ def create_shared():
     }
 
 def plant_and_verify(region_data,unverified_key,start_x,start_y):
-    quick_print("[plant_and_verify]", start_x,start_y,get_time())
     while True:
         copy_unverified = []
         for target_x, target_y in region_data[unverified_key]:
-                short_goto_xy(get_pos_x(), get_pos_y(), target_x, target_y)
+                short_goto(target_x, target_y)
                 if not can_harvest():
                     plant(Entities.Pumpkin)
                     if get_water() < WATER_THRESHOLD:
@@ -114,13 +113,11 @@ def loop_verify(region_data):
 
 def help(region_data, unverified):
     unverified_len = len(unverified)
-    if unverified_len <= 1:
-        return
-    if unverified_len >= 1:
+    if unverified_len > 0:
         target_x, target_y = unverified[-1]
         unverified.pop()
         region_data["help_flag"] = True
-        short_goto_xy(get_pos_x(), get_pos_y(), target_x, target_y)
+        short_goto(target_x, target_y)
         entity = get_entity_type()
         if entity == Entities.Pumpkin:
             if not can_harvest():
@@ -135,7 +132,7 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
     def worker():
         create_worker_right_6x6(region_x, region_y, start_x_R,start_y)
     spawn_drone(worker)
-    goto_xy(get_pos_x(), get_pos_y(), start_x_L, start_y)
+    goto(start_x_L, start_y)
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 3
@@ -186,7 +183,7 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
     def worker():
         create_worker_right_8x8(region_x, region_y, start_x_R,start_y)
     spawn_drone(worker)
-    goto_xy(get_pos_x(), get_pos_y(), start_x_L, start_y)
+    goto(start_x_L, start_y)
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 4
@@ -195,7 +192,7 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
     while True:
         current_pos_x = get_pos_x()
         if current_pos_x >= region_x_R:
-            short_goto_x(current_pos_x, region_x_L_R)
+            short_goto(region_x_L_R, get_pos_y())
         
         # 阶段1：种植
         path = PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)]
@@ -226,8 +223,7 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
         harvest()
         region_data["ready"] = False
         
-        pumpkin_count = num_items(Items.Pumpkin)
-        if pumpkin_count >= TARGET:
+        if num_items(Items.Pumpkin) >= TARGET:
             quick_print("[worker_left_8x8]", region_x, region_y, "Target reached")
             clear()
             return
@@ -236,7 +232,7 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 3
-    goto_xy(get_pos_x(), get_pos_y(), start_x, start_y)
+    goto(start_x, start_y)
     
     while True:
         # 等待左半边完成
@@ -245,6 +241,7 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
         x = get_pos_x()
         if x < region_x_R:
             short_goto_x(x, region_x_R)
+                
         # 阶段1：种植
         path = PATH_6X6[(get_pos_x() - region_x_R, get_pos_y() - region_y)]
         for direction in path:
@@ -274,7 +271,7 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 4
-    goto_xy(get_pos_x(), get_pos_y(), start_x, start_y)
+    goto(start_x, start_y)
     
     while True:
         # 等待左半边完成

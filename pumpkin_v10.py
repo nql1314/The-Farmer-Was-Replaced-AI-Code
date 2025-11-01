@@ -1,7 +1,4 @@
-# 32x32南瓜挑战 - 中间4个8x8区域 + 12个6x6区域
-
-from farm_utils import short_goto, goto,short_goto_x
-
+# 32x32南瓜挑战
 # 6x6路径定义：位置与方向的映射 {(x_offset, y_offset): direction}
 
 PATH_6X6 = {
@@ -64,6 +61,7 @@ PATH_8X8 = {
 WATER_THRESHOLD = 0.75
 WATER_COUNT = 10
 TARGET = 200000000
+WORLD_SIZE = 32
 
 def create_shared():
     return {
@@ -89,11 +87,68 @@ def create_shared():
         (16, 24):{'ready':False,'unverified_left':[],"unverified_right":[],"help_flag":False},
     }
 
-def plant_and_verify(region_data,unverified_key,start_x,start_y):
+
+def short_goto_xy(current_x, current_y, target_x, target_y):
+    dx = abs(target_x - current_x)
+    dy = abs(target_y - current_y)
+    if target_x > current_x:
+        for i in range(dx):
+            move(East)
+    else:
+        for i in range(dx):
+            move(West)
+    if target_y > current_y:
+        for i in range(dy):
+            move(North)
+    else:
+        for i in range(dy):
+            move(South)
+            
+def short_goto_x(current_x, target_x):
+    dx = abs(target_x - current_x)
+    if target_x > current_x:
+        for i in range(dx):
+            move(East)
+    else:
+        for i in range(dx):
+            move(West)
+
+def goto_xy(current_x, current_y, target_x, target_y):
+    
+    # 移动到指定位置（支持环形地图最短路径）
+    # 自动选择直接移动或跨越边界的最短路径
+    
+    # X轴移动：计算两个方向的距离，选择最短的
+    dx_east = (target_x - current_x) % WORLD_SIZE  # 向东的距离（可能跨界）
+    dx_west = (current_x - target_x) % WORLD_SIZE  # 向西的距离（可能跨界）
+    
+    if dx_east <= dx_west:
+        # 向东更近（包括相等时优先选择东）
+        for i in range(dx_east):
+            move(East)
+    else:
+        # 向西更近
+        for i in range(dx_west):
+            move(West)
+    
+    # Y轴移动：计算两个方向的距离，选择最短的
+    dy_north = (target_y - current_y) % WORLD_SIZE  # 向北的距离（可能跨界）
+    dy_south = (current_y - target_y) % WORLD_SIZE  # 向南的距离（可能跨界）
+    
+    if dy_north <= dy_south:
+        # 向北更近（包括相等时优先选择北）
+        for i in range(dy_north):
+            move(North)
+    else:
+        # 向南更近
+        for i in range(dy_south):
+            move(South)
+
+def plant_and_verify(region_data,unverified_key):
     while True:
         copy_unverified = []
         for target_x, target_y in region_data[unverified_key]:
-                short_goto(target_x, target_y)
+                short_goto_xy(get_pos_x(), get_pos_y(), target_x, target_y)
                 if not can_harvest():
                     plant(Entities.Pumpkin)
                     if get_water() < WATER_THRESHOLD:
@@ -113,11 +168,11 @@ def loop_verify(region_data):
 
 def help(region_data, unverified):
     unverified_len = len(unverified)
-    if unverified_len > 0:
+    if unverified_len > 1:
         target_x, target_y = unverified[-1]
         unverified.pop()
         region_data["help_flag"] = True
-        short_goto(target_x, target_y)
+        short_goto_xy(get_pos_x(), get_pos_y(), target_x, target_y)
         entity = get_entity_type()
         if entity == Entities.Pumpkin:
             if not can_harvest():
@@ -132,15 +187,14 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
     def worker():
         create_worker_right_6x6(region_x, region_y, start_x_R,start_y)
     spawn_drone(worker)
-    goto(start_x_L, start_y)
+    goto_xy(get_pos_x(), get_pos_y(), start_x_L, start_y)
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
-    region_x_R = region_x + 3
     region_x_L_R = region_x + 2
     
     while True:
         current_pos_x = get_pos_x()
-        if current_pos_x >= region_x_R:
+        if current_pos_x > region_x_L_R:
             short_goto_x(current_pos_x, region_x_L_R)
         
         # 阶段1：种植
@@ -157,12 +211,12 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
             if not can_harvest():
                 plant(Entities.Pumpkin)
                 unverified.append((get_pos_x(), get_pos_y()))
-                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                if get_water() < WATER_THRESHOLD and num_items(Items.Water) > WATER_COUNT:
                     use_item(Items.Water)
             move(direction)
         
         # 阶段3：验证和补种
-        plant_and_verify(region_data, "unverified_left", region_x, region_y)
+        plant_and_verify(region_data, "unverified_left")
         
         # 同步收获
         while not region_data["ready"]:
@@ -172,8 +226,7 @@ def create_worker_left_6x6(region_x, region_y, start_x_L, start_x_R,start_y):
         harvest()
         region_data["ready"] = False
         
-        pumpkin_count = num_items(Items.Pumpkin)
-        if pumpkin_count >= TARGET:
+        if num_items(Items.Pumpkin) >= TARGET:
             quick_print("[worker_left_6x6]", region_x, region_y, "Target reached")
             clear()
             return
@@ -183,16 +236,15 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
     def worker():
         create_worker_right_8x8(region_x, region_y, start_x_R,start_y)
     spawn_drone(worker)
-    goto(start_x_L, start_y)
+    goto_xy(get_pos_x(), get_pos_y(), start_x_L, start_y)
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
-    region_x_R = region_x + 4
     region_x_L_R = region_x + 3
     
     while True:
         current_pos_x = get_pos_x()
-        if current_pos_x >= region_x_R:
-            short_goto(region_x_L_R, get_pos_y())
+        if current_pos_x > region_x_L_R:
+            short_goto_x(current_pos_x, region_x_L_R)
         
         # 阶段1：种植
         path = PATH_8X8[(get_pos_x() - region_x, get_pos_y() - region_y)]
@@ -208,12 +260,12 @@ def create_worker_left_8x8(region_x, region_y, start_x_L, start_x_R,start_y):
             if not can_harvest():
                 plant(Entities.Pumpkin)
                 unverified.append((get_pos_x(), get_pos_y()))
-                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                if get_water() < WATER_THRESHOLD and num_items(Items.Water) > WATER_COUNT:
                     use_item(Items.Water)
             move(direction)
         
         # 阶段3：验证和补种
-        plant_and_verify(region_data, "unverified_left", region_x, region_y)
+        plant_and_verify(region_data, "unverified_left")
         
         # 同步收获
         while not region_data["ready"]:
@@ -232,7 +284,7 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 3
-    goto(start_x, start_y)
+    goto_xy(get_pos_x(), get_pos_y(), start_x, start_y)
     
     while True:
         # 等待左半边完成
@@ -256,12 +308,12 @@ def create_worker_right_6x6(region_x, region_y, start_x,start_y):
             if not can_harvest():
                 plant(Entities.Pumpkin)
                 unverified.append((get_pos_x(), get_pos_y()))
-                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                if get_water() < WATER_THRESHOLD and num_items(Items.Water) > WATER_COUNT:
                     use_item(Items.Water)
             move(direction)
         
         # 阶段3：验证和补种
-        plant_and_verify(region_data, "unverified_right", region_x, region_y)
+        plant_and_verify(region_data, "unverified_right")
         
         # 同步收获
         region_data["ready"] = True
@@ -271,7 +323,7 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
     shared = wait_for(memory_source)
     region_data = shared[(region_x, region_y)]
     region_x_R = region_x + 4
-    goto(start_x, start_y)
+    goto_xy(get_pos_x(), get_pos_y(), start_x, start_y)
     
     while True:
         # 等待左半边完成
@@ -295,12 +347,12 @@ def create_worker_right_8x8(region_x, region_y, start_x,start_y):
             if not can_harvest():
                 plant(Entities.Pumpkin)
                 unverified.append((get_pos_x(), get_pos_y()))
-                if num_items(Items.Water) > WATER_COUNT and get_water() < WATER_THRESHOLD:
+                if get_water() < WATER_THRESHOLD and num_items(Items.Water) > WATER_COUNT:
                     use_item(Items.Water)
             move(direction)
         
         # 阶段3：验证和补种
-        plant_and_verify(region_data, "unverified_right", region_x, region_y)
+        plant_and_verify(region_data, "unverified_right")
         
         # 同步收获
         region_data["ready"] = True

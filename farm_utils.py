@@ -4,6 +4,7 @@
 # ====================
 # 移动和导航函数
 # ====================
+world_size = get_world_size()
 def short_goto(target_x, target_y):
     current_x = get_pos_x()
     current_y = get_pos_y()
@@ -48,8 +49,6 @@ def goto_xy(current_x, current_y, target_x, target_y):
     
     # 移动到指定位置（支持环形地图最短路径）
     # 自动选择直接移动或跨越边界的最短路径
-    world_size = get_world_size()
-    
     # X轴移动：计算两个方向的距离，选择最短的
     dx_east = (target_x - current_x) % world_size  # 向东的距离（可能跨界）
     dx_west = (current_x - target_x) % world_size  # 向西的距离（可能跨界）

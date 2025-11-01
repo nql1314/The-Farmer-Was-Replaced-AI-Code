@@ -1,4 +1,4 @@
-# 32x32南瓜挑战 - 中间4个8x8区域 + 12个6x6区域
+# 32x32南瓜挑战
 
 from farm_utils import short_goto, goto
 
